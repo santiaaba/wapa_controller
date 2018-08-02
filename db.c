@@ -25,7 +25,7 @@ void db_load_sites(T_db *db, T_list_site *l){
 	MYSQL_ROW row;
 	T_site *new_site;
 
-	strcpy(query,"select * from site");
+	strcpy(query,"select s.*, c.user_id from site s inner join suscription c on s.susc_id = c.id");
 
 	mysql_query(db->con,query);
 	MYSQL_RES *result = mysql_store_result(db->con);
@@ -34,7 +34,7 @@ void db_load_sites(T_db *db, T_list_site *l){
 		printf("PASO\n");
 		new_site = (T_site*)malloc(sizeof(T_site));
 		printf("Nombre del sitio %s\n", row[2]);
-		site_init(new_site,row[2]);
+		site_init(new_site,row[2],strtoul(row[0]),strtoul(row[5]),strtoul(row[4]),atoi(row[1]),atoi(row[3]));
 		printf("Agregamos sitio\n");
 		list_site_add(l,new_site);
 	}
@@ -52,7 +52,7 @@ void db_load_workers(T_db *db, T_list_worker *l){
 
 	while ((row = mysql_fetch_row(result))){
 		new_worker = (T_worker*)malloc(sizeof(T_worker));
-		worker_init(new_worker,row[1],row[2]);
+		worker_init(new_worker,row[1],row[2],atoi(row[3]));
 		list_worker_add(l,new_worker);
 	}
 }

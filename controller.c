@@ -18,11 +18,35 @@ T_db db;
  * 	FUNCIONES		*
  ********************************/
 
-int sync(){
+int init_sync(){
 	/* Al iniciar el controller, se encarga de sincronizar el mismo
 	   con los workers. Esto es para no tener que redistribuir los
 	   sitios que ya estan siendo atendidos por los workers que estan
 	   online */
+
+	T_worker *worker;
+
+	list_worker_first(workers);
+	while(!list_worker_eol(workers)){
+		worker = list_worker_get(workers);
+		worker_sync(w);
+		list_worker_next(workers);
+	}
+}
+
+int check_worker(T_worker *w){
+	/* Verifica el estado de un worker y en base al mismo toma acciones. */
+	
+	T_worker *worker;
+
+	list_worker_first(workers);
+	while(!list_worker_eol(workers)){
+		worker = list_worker_get(workers);
+		worker_check(w);
+		if(worker_get_status(w)){
+		}
+		list_worker_next(workers);
+	}
 }
 
 /********************************
@@ -54,12 +78,18 @@ void main(){
 	db_load_workers(&db,&workers);
 	db_load_proxys(&db,&proxys);
 
+	/* Sincronizamos con la información en workers y proxys */
+	init_sync();
+
+	/* Reconfiguramos los proxys */
 
 	/* Iniciamos el server REST para la API */
 
-	/* Sincronizamos con la información en workers y proxys */
-
 	/* Comenzamos el loop del controller */
+	while(1){
+		/* Chequeo de workers */
+		/* Chequeo de proxys */
+	}
 
 	/* Finalizamos la conexion a la base */
 	db_close(&db);
