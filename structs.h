@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
+#include "parce.h"
 
 #ifndef STRUCT_H
 #define STRUCT_H
@@ -65,7 +65,9 @@ typedef struct {
 
 void worker_init(T_worker *w, char *name, char *ip, T_worker_status s);
 char *worker_get_name(T_worker *w);
+char *worker_get_name(T_worker *worker);
 char *worker_get_ip(T_worker *w);
+T_list_site *worker_get_sites(T_worker *w);
 void worker_set_online(T_worker *w);
 void worker_set_offline(T_worker *w);
 int worker_add_site(T_worker *w, T_site *s);

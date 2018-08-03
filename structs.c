@@ -69,21 +69,22 @@ void worker_init(T_worker *w, char *name, char *ip, T_worker_status s){
 	strcpy(w->name,name);
 	strcpy(w->ip,ip);
 	w->socket = socket(AF_INET , SOCK_STREAM , 0);
+	printf("La ip del worker %s es %s\n",name,ip);
 	w->server.sin_addr.s_addr = inet_addr(ip);
 	w->server.sin_family = AF_INET;
 	w->server.sin_port = htons(3550);
 	w->status = s;
 	w->prio_status = s;
 	w->time_change_status = time(0);
+	worker_connect(w);
 }
 int worker_connect(T_worker *w){
 	/* Funcion de uso interno */
 	/* Intenta conectarse al worker */
 
 	if (connect(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server)) < 0){
-		printf("Se pudo conectar\n");
-	} else {
 		printf("Problemas para conectar\n");
+		w->status = W_UNKNOWN;
 	}
 }
 
@@ -116,6 +117,10 @@ void worker_set_offline(T_worker *w){
 
 char *worker_get_name(T_worker *w){
 	return w->name;
+}
+
+T_list_site *worker_get_sites(T_worker *w){
+	return w->sites;
 }
 
 char *worker_get_ip(T_worker *w){
@@ -183,7 +188,7 @@ int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
 	/* Se conecta al worker, envia un comando y espera la respuesta */
 	/* El task_id de momento no se implementa
  	 * pero se reservan los primeros 4 bytes para ello */
-	char *buffer_tx[BUFFERSIZE];
+	char buffer_tx[BUFFERSIZE];
 
 	strcpy(buffer_tx,"0000|");
 	strcat(buffer_tx,command);
@@ -204,46 +209,61 @@ int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
 	return 1;
 }
 
+int worker_reconnect(T_worker *w){
+	/* funcion de uso interno */
+	worker_change_status(w,W_UNKNOWN);
+	worker_connect(w);
+	return 0;
+}
+
 int worker_sync(T_worker *w, T_list_site *s){
 	/* Se conecta al worker, obtiene el listado
 	 * de sitios y actualiza las estructuras */
 
 	char buffer_rx[BUFFERSIZE];
-	char aux[10];
-	int i,j, cant_sites;
+	char buffer_tx[BUFFERSIZE];
+	int eot = 0;	//Fin de transmision
+	int pos = 0;
+	char site_id[10];
 	T_site *site;
-	unsigned int site_id;
-	unsigned int last_site_id;
 
-	/* Si last_site_id es distinto de 0 significa que hay mas datos */
+	/*En este procedimiento no podemos utilizar el metodo worker_send_recive */
+
+	printf("Entramos a Sync\n");
+	if(send(w->socket,"G\0", BUFFERSIZE,0)<0){
+		printf("Intentamos reconectar\n");
+		return worker_reconnect(w);
+	}
 	do{
-		if(worker_send_recive(w,"0000G",buffer_rx)){
-			/* Obtenemos el last_id */
-			i=5;
-			for(j=0;j<4;j++){ aux[j] = buffer_rx[i+j];}
-			aux[4] = '\0';
-			last_site_id = strtoul(aux);
-			/* Obtenemos la cantidad de sitios que vienen en la respuesta */
-
-			aux[0] = buffer_rx[9]; aux[1] = buffer_rx[10]; aux[2] = '\0';
-
-			cant_sites = strtoui(aux);
-			i = 11;
-			while(cant_sites != 0){
-				for(j=0;j<4;j++){ aux[j] = buffer_rx[i+j];}
-	                        aux[4] = '\0';
-				i + 4;
-				site_id = atoi(aux);
-				/* Asignamos este sitio al worker en cuestion */
-				site = list_site_find_site_id(s,site_id);
-				list_site_add(w->sites,site);
-		                list_worker_add(site_get_workers(site),w);
-				cant_sites--;
-			}
+		//recibimos la primer holeada de datos
+		if(recv(w->socket,buffer_rx,BUFFERSIZE,0)<0){
+			¡¡¡¡¡¡¡MI ERROR. DEBO utilizar send recv de forma alternada o enviar
+				todos los sitios con un recv en un while !=0 y verificar que -1
+				es que falló la coneccion!!!!!!!!!!!!!!!!
+			printf("problemas de conectividad\n");
+			return worker_reconnect(w);
 		} else {
-			return 0;
+			printf("PASOOOOOO\n");
 		}
-	}while(last_site_id != 0);
+		printf("La primer oleada de datos es: -%s-\n",buffer_rx);
+		while(strlen(buffer_rx) > 0 && pos < strlen(buffer_rx)){
+			printf("POS: %i\n",pos);
+			parce_data(buffer_rx,&pos,site_id);
+			printf("sitio obtenido: %s\n",site_id);
+			site = list_site_find_site_id(s,atoi(site_id));
+			list_site_add(w->sites,site);
+			list_worker_add(site_get_workers(site),w);
+		}
+		
+		//recibimos si hay mas datos para ser enviados
+		if(recv(w->socket,buffer_rx,BUFFERSIZE,0)<0){
+			printf("problemas de conectividad\n");
+			return worker_reconnect(w);
+		}
+		printf("Recibimos fin = %s\n",buffer_rx);
+		eot = atoi(buffer_rx);
+		printf("recibimos fin = %i\n",eot);
+	} while(!eot);
 }
 
 /*****************************
@@ -300,7 +320,7 @@ void list_worker_first(T_list_worker *l){
 
 void list_worker_next(T_list_worker *l){
 	/* Avanza el puntero de actual al siguiente siempre que pueda */
-	if(l->actual->next != NULL){
+	if(l->actual != NULL){
 		l->actual = l->actual->next;
 	}
 }
@@ -397,7 +417,7 @@ void list_site_first(T_list_site *l){
 
 void list_site_next(T_list_site *l){
 	/* Avanza el puntero de actual al siguiente siempre que pueda */
-	if(l->actual->next != NULL){
+	if(l->actual != NULL){
 		l->actual = l->actual->next;
 	}
 }
@@ -513,7 +533,7 @@ void list_proxy_first(T_list_proxy *l){
 
 void list_proxy_next(T_list_proxy *l){
 	/* Avanza el puntero de actual al siguiente siempre que pueda */
-	if(l->actual->next != NULL){
+	if(l->actual != NULL){
 		l->actual = l->actual->next;
 	}
 }

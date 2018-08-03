@@ -34,7 +34,7 @@ void db_load_sites(T_db *db, T_list_site *l){
 		printf("PASO\n");
 		new_site = (T_site*)malloc(sizeof(T_site));
 		printf("Nombre del sitio %s\n", row[2]);
-		site_init(new_site,row[2],strtoul(row[0]),strtoul(row[5]),strtoul(row[4]),atoi(row[1]),atoi(row[3]));
+		site_init(new_site,row[2],atoi(row[0]),atoi(row[5]),atoi(row[4]),atoi(row[1]),atoi(row[3]));
 		printf("Agregamos sitio\n");
 		list_site_add(l,new_site);
 	}
