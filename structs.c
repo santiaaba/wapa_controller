@@ -113,6 +113,12 @@ int worker_end_connect(T_worker *w){
 
 void worker_change_status(T_worker *w, T_worker_status s){
 	/* funcion de uso interno */
+	char aux[100];
+	char aux2[100];
+	
+	itowstatus(w->last_status,aux);
+	itowstatus(s,aux2);
+	printf("Worker %s, cambio estado de %s a %s\n",w->name,aux,aux2);
 	w->time_change_status = time(0);
 	w->last_status = w->status;
 	w->status = s;
@@ -178,7 +184,8 @@ void worker_check(T_worker *w){
 			/* No responde */
 			worker_change_status(w,W_UNKNOWN);
 		} else {
-			if(buffer_rx[4] == 1){
+			printf("CHECK: -%s-\n",buffer_rx);
+			if(buffer_rx[0] == '1'){
 				/* Responde y pasa el chequeo */
 				if(w->status == W_BROKEN || w->status == W_UNKNOWN){
 					/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
@@ -192,7 +199,8 @@ void worker_check(T_worker *w){
 					}
 				}
 			} else {
-				 worker_change_status(w,W_BROKEN);
+				printf("worker %s ROTO!\n",worker_get_name(w));
+				worker_change_status(w,W_BROKEN);
 			}
 		}
 	}
