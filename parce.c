@@ -13,8 +13,8 @@ void parce_data(char *buffer, int *i, char *value){
 	largo = strlen(buffer);
 	printf("Parceando %s\n",buffer);
 	while(*i < largo && buffer[*i] != '|' && buffer[*i] != '\0'){
-		printf("la i es: %i\n",*i);
-		printf("%c\n",buffer[*i]);
+		//printf("la i es: %i\n",*i);
+		//printf("%c\n",buffer[*i]);
 		value[j] = buffer[*i];
 		j++; (*i)++;
 	}
@@ -22,5 +22,5 @@ void parce_data(char *buffer, int *i, char *value){
 	/* Adelantamos la i una posicion ya que se
 	 * encuentra parada en el caracter "|" posiblemente */
 	(*i)++;
-	printf("valor: %s\n",value);
+	//printf("valor: %s\n",value);
 }

@@ -1,6 +1,21 @@
 #include "structs.h"
 
 /*****************************
+         Varios 
+******************************/
+
+void itowstatus(T_worker_status i, char *name){
+	switch(i){
+		case W_ONLINE: strcpy(name,"W_ONLINE"); break;
+		case W_UNKNOWN: strcpy(name,"W_UNKNOWN"); break;
+		case W_OFFLINE: strcpy(name,"W_OFFLINE"); break;
+		case W_BROKEN: strcpy(name,"W_BROKEN"); break;
+		case W_PREPARED: strcpy(name,"W_PREPARED"); break;
+	}
+}
+
+
+/*****************************
          Sitios
 ******************************/
 void site_init(T_site *s, char *name, unsigned int id, unsigned int userid,
@@ -63,7 +78,8 @@ T_site_status site_get_status(T_site *s){
 /*****************************
          Workers
 ******************************/
-void worker_init(T_worker *w, char *name, char *ip, T_worker_status s){
+void worker_init(T_worker *w, int id, char *name, char *ip, T_worker_status s){
+	w->id = id;
 	w->sites = (T_list_site*)malloc(sizeof(T_list_site));
 	list_site_init(w->sites);
 	strcpy(w->name,name);
@@ -74,7 +90,7 @@ void worker_init(T_worker *w, char *name, char *ip, T_worker_status s){
 	w->server.sin_family = AF_INET;
 	w->server.sin_port = htons(3550);
 	w->status = s;
-	w->prio_status = s;
+	w->last_status = s;
 	w->time_change_status = time(0);
 	worker_connect(w);
 }
@@ -82,8 +98,9 @@ int worker_connect(T_worker *w){
 	/* Funcion de uso interno */
 	/* Intenta conectarse al worker */
 
+	printf("worker %s: Conectamos de nuevo!!!\n",worker_get_name(w));
 	if (connect(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server)) < 0){
-		printf("Problemas para conectar\n");
+		printf("worker-connect: Problemas para conectar\n");
 		w->status = W_UNKNOWN;
 	}
 }
@@ -97,8 +114,20 @@ int worker_end_connect(T_worker *w){
 void worker_change_status(T_worker *w, T_worker_status s){
 	/* funcion de uso interno */
 	w->time_change_status = time(0);
-	w->prio_status = w->status;
+	w->last_status = w->status;
 	w->status = s;
+}
+
+T_worker_status worker_get_status(T_worker *w){
+	return w->status;
+}
+
+T_worker_status worker_get_last_status(T_worker *w){
+	return w->last_status;
+}
+
+int worker_get_id(T_worker *w){
+	return w->id;
 }
 
 void worker_update_state(T_worker *w){
@@ -119,16 +148,22 @@ char *worker_get_name(T_worker *w){
 	return w->name;
 }
 
-T_list_site *worker_get_sites(T_worker *w){
-	return w->sites;
-}
-
 char *worker_get_ip(T_worker *w){
 	return w->ip;
 }
 
-T_worker_status worker_get_status(T_worker *w){
-	return w->status;
+void worker_purge(T_worker *w){
+	/* Se desasignan todos los sitios del worker */
+
+	T_site *site;
+
+	list_site_first(w->sites);
+	while(list_site_eol(w->sites)){
+		site = list_site_get(w->sites);
+		list_worker_remove(site_get_workers(site));
+		list_site_next(w->sites);
+	}
+	list_site_erase(w->sites);
 }
 
 void worker_check(T_worker *w){
@@ -139,7 +174,7 @@ void worker_check(T_worker *w){
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
 	if(w->status != W_OFFLINE){
-		if(!worker_send_recive(w,"S",buffer_rx)){
+		if(!worker_send_recive(w,"C",buffer_rx)){
 			/* No responde */
 			worker_change_status(w,W_UNKNOWN);
 		} else {
@@ -164,6 +199,8 @@ void worker_check(T_worker *w){
 }
 
 int worker_add_site(T_worker *w, T_site *s){
+	/* Agrega fisica y logicamente un sitio a un worker.
+	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 
 	char command[BUFFERSIZE];
 	char aux[50];
@@ -186,31 +223,33 @@ int worker_add_site(T_worker *w, T_site *s){
 
 int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
 	/* Se conecta al worker, envia un comando y espera la respuesta */
-	/* El task_id de momento no se implementa
- 	 * pero se reservan los primeros 4 bytes para ello */
-	char buffer_tx[BUFFERSIZE];
 
-	strcpy(buffer_tx,"0000|");
-	strcat(buffer_tx,command);
-	if(send(w->socket,buffer_tx, BUFFERSIZE,0)<0){
+	int cant_bytes;
+
+	cant_bytes = send(w->socket,command, BUFFERSIZE,0);
+	printf("send_recive - enviando(%i): %s\n",cant_bytes,command);
+	if(cant_bytes <0){
 		/* Fallo la conectividad contra el worker */
 		worker_change_status(w,W_UNKNOWN);
 		/* Reintentamos conectar */
 		worker_connect(w);
 		return 0;
 	}
-	if(recv(w->socket,buffer_rx,BUFFERSIZE,0)<0){
+	cant_bytes = recv(w->socket,buffer_rx,BUFFERSIZE,0);
+	if(cant_bytes<0){
 		/* Fallo la conectividad contr el worker */
 		worker_change_status(w,W_UNKNOWN);
 		/* Reintentamos conectar */
 		worker_connect(w);
 		return 0;
 	}
+	printf("send_recive - recibido(%i): %s\n",cant_bytes,buffer_rx);
 	return 1;
 }
 
 int worker_reconnect(T_worker *w){
 	/* funcion de uso interno */
+	printf("Reconectamos %s\n",worker_get_name(w));
 	worker_change_status(w,W_UNKNOWN);
 	worker_connect(w);
 	return 0;
@@ -222,9 +261,9 @@ int worker_sync(T_worker *w, T_list_site *s){
 
 	char buffer_rx[BUFFERSIZE];
 	char buffer_tx[BUFFERSIZE];
-	int eot = 0;	//Fin de transmision
-	int pos = 0;
-	char site_id[10];
+	int nextdata = 0;	//Fin de transmision
+	int pos = 2;		// Ya que en 2 se indica si hay mas datos luego
+	char aux[10];
 	T_site *site;
 
 	/*En este procedimiento no podemos utilizar el metodo worker_send_recive */
@@ -237,33 +276,32 @@ int worker_sync(T_worker *w, T_list_site *s){
 	do{
 		//recibimos la primer holeada de datos
 		if(recv(w->socket,buffer_rx,BUFFERSIZE,0)<0){
-			¡¡¡¡¡¡¡MI ERROR. DEBO utilizar send recv de forma alternada o enviar
-				todos los sitios con un recv en un while !=0 y verificar que -1
-				es que falló la coneccion!!!!!!!!!!!!!!!!
 			printf("problemas de conectividad\n");
 			return worker_reconnect(w);
 		} else {
-			printf("PASOOOOOO\n");
+			printf("La primer oleada de datos es: -%s-\n",buffer_rx);
+			// El primer valor de los datos es un 1 o un 0. Es un 1 si hay mas datos
+			// para recibir luego de estos
+			parce_data(buffer_rx,&pos,aux);
+			nextdata = atoi(aux);
+			printf("pos deberia estar en 4: %i\n",pos);
+			while(strlen(buffer_rx) > 0 && pos < strlen(buffer_rx)){
+				printf("POS: %i\n",pos);
+				parce_data(buffer_rx,&pos,aux);
+				printf("sitio obtenido: %s\n",aux);
+				site = list_site_find_id(s,atoi(aux));
+				list_site_add(w->sites,site);
+				list_worker_add(site_get_workers(site),w);
+			}
+			if(nextdata == 1){
+				if(send(w->socket,"1\0",BUFFERSIZE,0)<0){
+		                        printf("problemas de conectividad\n");
+        		                return worker_reconnect(w);
+				}
+			}
 		}
-		printf("La primer oleada de datos es: -%s-\n",buffer_rx);
-		while(strlen(buffer_rx) > 0 && pos < strlen(buffer_rx)){
-			printf("POS: %i\n",pos);
-			parce_data(buffer_rx,&pos,site_id);
-			printf("sitio obtenido: %s\n",site_id);
-			site = list_site_find_site_id(s,atoi(site_id));
-			list_site_add(w->sites,site);
-			list_worker_add(site_get_workers(site),w);
-		}
-		
-		//recibimos si hay mas datos para ser enviados
-		if(recv(w->socket,buffer_rx,BUFFERSIZE,0)<0){
-			printf("problemas de conectividad\n");
-			return worker_reconnect(w);
-		}
-		printf("Recibimos fin = %s\n",buffer_rx);
-		eot = atoi(buffer_rx);
-		printf("recibimos fin = %i\n",eot);
-	} while(!eot);
+	} while(nextdata);
+	printf("-- Terminamos SYNC\n");
 }
 
 /*****************************
@@ -294,7 +332,9 @@ void list_worker_init(T_list_worker *l){
 void list_worker_add(T_list_worker *l, T_worker *w){
 	/* Agrega un worker al last de la lista.
 	 * El puntero actual no se modifica. Excepto que se
-	 * trate del primer elemento en ingresar a la lista */
+	 * trate del primer elemento en ingresar a la lista
+	 * No contempla datos repetidos. Es responsabilidad de
+	 * la funcion llamadora */
 
 	list_w_node *new;
 	list_w_node *aux;
@@ -342,12 +382,13 @@ int list_worker_eol(T_list_worker *l){
 	return (l->actual == NULL);
 }
 
-void list_worker_remove(T_list_worker *l){
+T_worker *list_worker_remove(T_list_worker *l){
 	/* Elimina del alista el elemento apuntado por el punero actual.
  	 * El puntero actual pasa al nodo siguiente */
 
 	list_w_node *prio;
 	list_w_node *aux;
+	T_worker *element;
 
 	if(l->actual != NULL){
 		aux = l->first;
@@ -365,8 +406,10 @@ void list_worker_remove(T_list_worker *l){
 			l->last = prio;
 		}
 		l->actual = aux->next;
+		element = aux->data;
 		free(aux);
 	}
+	return element;
 }
 
 void list_worker_erase(T_list_worker *l){
@@ -375,6 +418,21 @@ void list_worker_erase(T_list_worker *l){
 	while(!list_worker_eol(l)){
 		list_worker_remove(l);
 	}
+}
+
+T_worker *list_worker_find_id(T_list_worker *l, int worker_id){
+	/* Retorna el worker buscando por su id. Si no
+	 * existe retorna null */
+
+	int exist = 0;
+
+	list_worker_first(l);
+	while(!list_worker_eol(l) && !exist){
+		exist = (worker_get_id(l->actual->data) == worker_id);
+		list_worker_next(l);
+	}
+	/* Si se encontr se retorna. Sino l->actual->data deberia ser NULL */
+	return l->actual->data;
 }
 
 /*****************************
@@ -391,7 +449,9 @@ void list_site_init(T_list_site *l){
 void list_site_add(T_list_site *l, T_site *w){
 	/* Agrega un worker al last de la lista.
 	 * El puntero actual no se modifica. Excepto que se
-	 * trate del primer elemento en ingresar a la lista */
+	 * trate del primer elemento en ingresar a la lista
+	 * No contempla datos repetidos. Es responsabilidad de
+	 * la funcion llamadora */
 
 	list_s_node *new;
 	list_s_node *aux;
@@ -428,7 +488,7 @@ T_site *list_site_get(T_list_site *l){
 	return l->actual->data;
 }
 
-T_site *list_site_find_site_id(T_list_site *l, unsigned int site_id){
+T_site *list_site_find_id(T_list_site *l, unsigned int site_id){
 	/* busca y retorna el sitio que posea el id. Si no existe
 	 * returna null. No mueve el indice actual de la lista */
 
@@ -458,12 +518,14 @@ int list_site_eol(T_list_site *l){
 	return (l->actual == NULL);
 }
 
-void list_site_remove(T_list_site *l){
-	/* Elimina del alista el elemento apuntado por el punero actual.
+T_site *list_site_remove(T_list_site *l){
+	/* remueve de la lista el elemento apuntado por el punero actual.
  	 * El puntero actual pasa al nodo siguiente */
+	/* EL ELEMENTO SE RETORNA. SOLO SE LO REMUEVE DE LA LISTA */
 
 	list_s_node *prio;
 	list_s_node *aux;
+	T_site *element = NULL;
 
 	if(l->actual != NULL){
 		aux = l->first;
@@ -481,8 +543,10 @@ void list_site_remove(T_list_site *l){
 			l->last = prio;
 		}
 		l->actual = aux->next;
+		element = aux->data;
 		free(aux);
 	}
+	return element;
 }
 
 void list_site_erase(T_list_site *l){

@@ -31,13 +31,13 @@ void db_load_sites(T_db *db, T_list_site *l){
 	MYSQL_RES *result = mysql_store_result(db->con);
 
 	while ((row = mysql_fetch_row(result))){
-		printf("PASO\n");
 		new_site = (T_site*)malloc(sizeof(T_site));
 		printf("Nombre del sitio %s\n", row[2]);
 		site_init(new_site,row[2],atoi(row[0]),atoi(row[5]),atoi(row[4]),atoi(row[1]),atoi(row[3]));
 		printf("Agregamos sitio\n");
 		list_site_add(l,new_site);
 	}
+	printf("Terminamos load sites\n");
 }
 
 void db_load_workers(T_db *db, T_list_worker *l){
@@ -52,9 +52,10 @@ void db_load_workers(T_db *db, T_list_worker *l){
 
 	while ((row = mysql_fetch_row(result))){
 		new_worker = (T_worker*)malloc(sizeof(T_worker));
-		worker_init(new_worker,row[1],row[2],atoi(row[3]));
+		worker_init(new_worker,atoi(row[0]),row[1],row[2],atoi(row[3]));
 		list_worker_add(l,new_worker);
 	}
+	printf("Terminamos load workers\n");
 }
 
 void db_load_proxys(T_db *db, T_list_proxy *l){
