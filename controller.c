@@ -54,21 +54,20 @@ int check_workers(T_list_worker *workers){
 		itowstatus(worker_get_status(worker),status);
 		itowstatus(worker_get_last_status(worker),last_status);
 		printf("status %s - last_status %s\n",status,last_status);
-		if(worker_get_status(worker) == W_ONLINE){
-			if(worker_get_last_status(worker) == W_PREPARED){
-				/* Worker se recupera de una falla */
-				printf("Worker %s paso de PREPARED a ONLINE. Requiere balance\n",worker_get_name(worker));
-				//balance(workers);
-			}
+		if((worker_get_status(worker) == W_ONLINE) && (worker_get_last_status(worker) == W_PREPARED)){
+			printf("Worker %s paso de PREPARED a ONLINE.\n",worker_get_name(worker));
+			/* Worker se recupera de una falla */
+			worker_purge(worker);
+			/* Debemos balancear posiblemente */
 		}
 		if((worker_get_status(worker) == W_BROKEN ||
 		   worker_get_status(worker) == W_UNKNOWN) &&
 		   worker_get_last_status(worker) == W_ONLINE){
+			printf("Worker %s paso de ONLINE a FALLANDO.\n",worker_get_name(worker));
 			/* Worker estaba online y ha sufrido un fallo */
-			/* Se le quitan los sitios */
-			printf("Worker %s paso a BROKEN o UNKNOWN. Requiere balance\n",worker_get_name(worker));
-			//worker_purge(worker);
-			//balance(workers);
+			worker_purge(worker);
+			/* El proceso normalice_sites se encargara de asignar los sitios
+ 			 * que se han eliminado del worker con falla */
 		}
 		list_worker_next(workers);
 	}
@@ -79,30 +78,53 @@ int check_workers(T_list_worker *workers){
 int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *site){
 	/* Selecciona los workers candidatos para asignar un sitio
 	 * que necesite n cantidad de ellos */
+	/* La condicion de momento es workers activos con menos sitios */
 
+	T_worker *worker;
+	char aux[50];
+
+	list_worker_sort(workers);
+	list_worker_first(workers);
+	while(site_get_real_size(site) < site_get_size(site)
+	&& !list_worker_eol(workers)){
+		worker = list_worker_get(workers);
+		printf("Verificamos worker para candidato\n");
+		printf("	Name: %s\n",worker_get_name(worker));
+		itowstatus(worker_get_status(worker),aux);
+		printf("	Status: %s\n",aux);
+		printf("	id: %i\n",worker_get_id(worker));
+		if((worker_get_status(worker) == W_ONLINE)
+		&& (!list_worker_find_id(site_get_workers(site),worker_get_id(worker)))){
+			printf("Worker %s es candidato\n",worker_get_name(worker));
+			list_worker_add(candidates,list_worker_get(workers));
+		}
+		list_worker_next(workers);
+	}
 	return 1;
 }
 
-int assign_workers(T_list_worker *candidates, T_site *site){
+int assign_workers(T_list_worker *candidates, T_site *site, T_config *config){
 	/* Asigna un sitio a cada worker de la lista pasada
 	 * por parametro */
 
 	T_worker *worker;
 
+	printf("Comenzamos a asignar workers\n");
 	list_worker_first(candidates);
 	while(!list_worker_eol(candidates)){
 		worker = list_worker_get(candidates);
-		worker_add_site(worker,site);
+		worker_add_site(worker,site,config_default_domain(config));
 		list_worker_next(candidates);
 	}
 	return 1;
 }
 
 int des_assign_workers(T_site *site){
+	/* Quita workers de un sitio en el cual excede su cantidad */
 	return 1;
 }
 
-int normalice_sites(T_list_site *sites, T_list_worker *workers){
+int normalice_sites(T_list_site *sites, T_list_worker *workers, T_config *config){
 	/* Recorre la lista de sitios buscando sitios donde la
 	 * cantidad de workers asignados no sea la adecuada */
 
@@ -110,26 +132,31 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers){
 	T_list_worker candidates;
 	int siterealsize;
 
+	printf("----- NORMALICE ----\n");
 	list_site_first(sites);
 	list_worker_init(&candidates);
 	while(!list_site_eol(sites)){
 		site = list_site_get(sites);
 		siterealsize = site_get_real_size(site);
-		if(siterealsize > site_get_size(site)){
+		printf("	Revisamos el sitio %s - real %i: need %i\n",site_get_name(site),siterealsize,site_get_size(site));
+		if(siterealsize < site_get_size(site)){
 			/* Estan faltando workers */
 			list_worker_erase(&candidates);
+			printf("	Seleccionamos los workers\n");
 			select_workers(workers,&candidates,site);
-			assign_workers(&candidates,site);
+			printf("	Asignamos los workers\n");
+			assign_workers(&candidates,site,config);
 		} else {
-			if(siterealsize < site_get_size(site)){
+			if(siterealsize > site_get_size(site)){
 				/* Estan sobrando workers */
+				printf("	Estan sobrando workers\n");
 				des_assign_workers(site);
 			}
 		}
 		list_site_next(sites);
 	}
+	printf("----- FIN NORMALICE ----\n");
 	return 1;
-	
 }
 
 int balance(T_list_worker *workers){
@@ -170,6 +197,11 @@ void main(){
 	/* Sincronizamos con la información en workers y proxys */
 	printf("--INI Sincronizamos workers--\n");
 	init_sync(&workers,&sites);
+	/* puede pasar que haya workers que estuvieron con problemas, ahora
+	   funcionan correctamente y al realizar el sync hayan quedado sitios
+	   asignados a mas cantidad de workers de los que deben. Corremos la
+	   funcion normalice_sites */
+	//normalice_sites(&workers,&sites,&config);
 	printf("--FIN Sincronizamos workers--\n");
 
 	/* Reconfiguramos los proxys */
@@ -185,7 +217,7 @@ void main(){
 		//check_proxys(&proxys);
 		
 		/* Asignacion sitios a worker */
-		//assign_sites(sites,workers);
+		normalice_sites(&sites, &workers, &config);
 		
 		sleep(5);
 	}

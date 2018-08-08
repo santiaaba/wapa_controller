@@ -13,6 +13,7 @@ typedef struct config{
         char db_name[20];
         char db_user[20];
         char db_pass[20];
+	char default_domain[100];
 } T_config;
 
 int config_load(const char *filename, T_config *conf);
@@ -20,5 +21,6 @@ char *config_db_server(T_config *conf);
 char *config_db_name(T_config *conf);
 char *config_db_user(T_config *conf);
 char *config_db_pass(T_config *conf);
+char *config_default_domain(T_config *conf);
 
 #endif

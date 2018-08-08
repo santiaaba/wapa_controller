@@ -22,8 +22,9 @@ const char *db_error(T_db *db){
 
 void db_load_sites(T_db *db, T_list_site *l){
 	char query[200];
-	MYSQL_ROW row;
+	MYSQL_ROW row, row_alias;
 	T_site *new_site;
+	T_alias *new_alias;
 
 	strcpy(query,"select s.*, c.user_id from site s inner join suscription c on s.susc_id = c.id");
 
@@ -32,9 +33,19 @@ void db_load_sites(T_db *db, T_list_site *l){
 
 	while ((row = mysql_fetch_row(result))){
 		new_site = (T_site*)malloc(sizeof(T_site));
-		printf("Nombre del sitio %s\n", row[2]);
+		printf("DB ID: %i SUSC: %i\n",atoi(row[5]),atoi(row[4]));
 		site_init(new_site,row[2],atoi(row[0]),atoi(row[5]),atoi(row[4]),atoi(row[1]),atoi(row[3]));
-		printf("Agregamos sitio\n");
+
+		/* Cargamos los alias */
+		sprintf(query,"select id,alias from alias where site_id=%s\n",row[0]);
+		printf("Consulta para obtener los alias del sitio id %s: %s\n",row[0],query);
+		mysql_query(db->con,query);
+		MYSQL_RES *result_alias = mysql_store_result(db->con);
+		while ((row_alias = mysql_fetch_row(result_alias))){
+			new_alias = (T_alias*)malloc(sizeof(T_alias));
+			alias_init(new_alias,atoi(row_alias[0]),row_alias[1]);
+			list_alias_add(site_get_alias(new_site),new_alias);
+		}
 		list_site_add(l,new_site);
 	}
 	printf("Terminamos load sites\n");

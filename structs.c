@@ -1,7 +1,8 @@
 #include "structs.h"
+#include "string.h"
 
 /*****************************
-         Varios 
+	 Varios 
 ******************************/
 
 void itowstatus(T_worker_status i, char *name){
@@ -14,14 +15,33 @@ void itowstatus(T_worker_status i, char *name){
 	}
 }
 
+/*****************************
+	  Alias 
+******************************/
+void alias_init(T_alias *a, unsigned int id, char *name){
+	a->id = id;
+	a->name = malloc(strlen(name));
+	strcpy(a->name,name);
+	printf("Nombre copiado %s = %s\n",name,a->name);
+}
+
+char *alias_get_name(T_alias *a){
+	return a->name;
+}
+
+unsigned int alias_get_id(T_alias *a){
+	return a->id;
+}
 
 /*****************************
-         Sitios
+	 Sitios
 ******************************/
 void site_init(T_site *s, char *name, unsigned int id, unsigned int userid,
 	       unsigned int susc, unsigned int version, unsigned int size){
 	s->workers = (T_list_worker*)malloc(sizeof(T_list_worker));
+	s->alias = (T_list_alias*)malloc(sizeof(T_list_alias));
 	list_worker_init(s->workers);
+	list_alias_init(s->alias);
 	strcpy(s->name,name);
 	s->status = W_ONLINE;
 	s->id = id;
@@ -67,7 +87,7 @@ unsigned int site_get_real_size(T_site *s){
 	return list_worker_size(s->workers);
 }
 
-char *site_get_alias(T_site *s){
+T_list_alias *site_get_alias(T_site *s){
 	return s->alias;
 }
 
@@ -76,7 +96,7 @@ T_site_status site_get_status(T_site *s){
 }
 
 /*****************************
-         Workers
+	 Workers
 ******************************/
 void worker_init(T_worker *w, int id, char *name, char *ip, T_worker_status s){
 	w->id = id;
@@ -84,8 +104,6 @@ void worker_init(T_worker *w, int id, char *name, char *ip, T_worker_status s){
 	list_site_init(w->sites);
 	strcpy(w->name,name);
 	strcpy(w->ip,ip);
-	w->socket = socket(AF_INET , SOCK_STREAM , 0);
-	printf("La ip del worker %s es %s\n",name,ip);
 	w->server.sin_addr.s_addr = inet_addr(ip);
 	w->server.sin_family = AF_INET;
 	w->server.sin_port = htons(3550);
@@ -98,9 +116,9 @@ int worker_connect(T_worker *w){
 	/* Funcion de uso interno */
 	/* Intenta conectarse al worker */
 
-	printf("worker %s: Conectamos de nuevo!!!\n",worker_get_name(w));
+	close(w->socket);
+	w->socket = socket(AF_INET , SOCK_STREAM , 0);
 	if (connect(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server)) < 0){
-		printf("worker-connect: Problemas para conectar\n");
 		w->status = W_UNKNOWN;
 	}
 }
@@ -111,6 +129,10 @@ int worker_end_connect(T_worker *w){
 	close(w->socket);
 }
 
+unsigned int worker_get_last_time(T_worker *w){
+	return w->time_change_status;
+}
+
 void worker_change_status(T_worker *w, T_worker_status s){
 	/* funcion de uso interno */
 	char aux[100];
@@ -118,8 +140,9 @@ void worker_change_status(T_worker *w, T_worker_status s){
 	
 	itowstatus(w->last_status,aux);
 	itowstatus(s,aux2);
-	printf("Worker %s, cambio estado de %s a %s\n",w->name,aux,aux2);
-	w->time_change_status = time(0);
+	if(w->status != s){
+		w->time_change_status = (unsigned long)time(0);
+	}
 	w->last_status = w->status;
 	w->status = s;
 }
@@ -158,18 +181,35 @@ char *worker_get_ip(T_worker *w){
 	return w->ip;
 }
 
+T_list_site *worker_get_sites(T_worker *w){
+	return w->sites;
+}
+
 void worker_purge(T_worker *w){
-	/* Se desasignan todos los sitios del worker */
+	/* Se desasignan todos los sitios del worker.
+	 * Se eliminan tambien los archivos fisicos */
 
 	T_site *site;
+	char buffer_rx[BUFFERSIZE];
 
+	printf("PURGE: Eliminamos sitios logicos\n");
 	list_site_first(w->sites);
-	while(list_site_eol(w->sites)){
+	printf("PURGE: Entrando while\n");
+	while(!list_site_eol(w->sites)){
+		printf("Obteniendo sitio\n");
 		site = list_site_get(w->sites);
+		printf("PURGE: Removiendo worker del sitio\n");
 		list_worker_remove(site_get_workers(site));
+		printf("PURGE: proximo sitio\n");
 		list_site_next(w->sites);
 	}
+	printf("PURGE: borrando lista de sitios del worker\n");
 	list_site_erase(w->sites);
+
+	/* Una vez eliminados todos los sitios, procedemos
+ 	 * a pedirle al worker fisico que elimine los archivos */
+	printf("PURGE: Eliminamos sitios fisicos\n");
+	worker_send_recive(w,"P",buffer_rx);
 }
 
 void worker_check(T_worker *w){
@@ -179,6 +219,7 @@ void worker_check(T_worker *w){
 
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
+	printf("Tiempo entre estados %lu - %lu = %lu\n",(unsigned long)time(0),(unsigned long)w->time_change_status,(unsigned long)time(0) - (unsigned long)w->time_change_status);
 	if(w->status != W_OFFLINE){
 		if(!worker_send_recive(w,"C",buffer_rx)){
 			/* No responde */
@@ -187,15 +228,23 @@ void worker_check(T_worker *w){
 			printf("CHECK: -%s-\n",buffer_rx);
 			if(buffer_rx[0] == '1'){
 				/* Responde y pasa el chequeo */
-				if(w->status == W_BROKEN || w->status == W_UNKNOWN){
-					/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
-					worker_change_status(w,W_PREPARED);
+				if(w->status == W_ONLINE){
+					/* Continua ON_LINE */
+					worker_change_status(w,W_ONLINE);
 				} else {
-					if((w->status == W_PREPARED) &&
-					   (difftime(w->time_change_status,time(0)) > TIMEONLINE)){
-					         /* Responde, pasa el chequeo, 
-						  * ya estaba en PREPARED y paso el tiempo */
-						 worker_change_status(w,W_ONLINE);
+					if(w->status == W_BROKEN || w->status == W_UNKNOWN){
+						/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
+						worker_change_status(w,W_PREPARED);
+					} else {
+						if((w->status == W_PREPARED) &&
+						   ((unsigned long)time(0) - w->time_change_status) > TIMEONLINE){
+							 /* Responde, pasa el chequeo, 
+							  * ya estaba en PREPARED y paso el tiempo */
+							 worker_change_status(w,W_ONLINE);
+						} else {
+							/* Continua en PREPARED */
+							 worker_change_status(w,W_PREPARED);
+						}
 					}
 				}
 			} else {
@@ -206,23 +255,67 @@ void worker_check(T_worker *w){
 	}
 }
 
-int worker_add_site(T_worker *w, T_site *s){
+int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 	/* Agrega fisica y logicamente un sitio a un worker.
 	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 
-	char command[BUFFERSIZE];
-	char aux[50];
+	char aux[512];
 	char aux2[4];	//Para codificar los unsigned int;
 	char buffer_rx[BUFFERSIZE];
+	char buffer_tx[BUFFERSIZE];
+	T_alias *alias;
 
 	/* OJO.. en la siguiente linea puede que superemos el buffer
 	 * a causa de los alias. Habria que enviarlos de otra forma */
-	sprintf(command,"1|%s|%s|%s|%s\0",site_get_name(s),
-	site_get_userid(s),site_get_susc(s),site_get_alias(s));
-	if(worker_send_recive(w,command,buffer_rx)){
-		list_site_add(w->sites,s);
-		list_worker_add(site_get_workers(s),w);
-		return 1;
+	printf("OBTENEMOS %lu\n",site_get_susc(s));
+
+	/* hay algun problema con el dato en la posicion de la suscripcion con
+	 * comando siguiente. Asi que debemos buscar otra forma 
+ 	 * sprintf(buffer_tx,"A|%s|%lu|%lu|%lu|%lu|%s",site_get_name(s),site_get_id(s),
+	site_get_version(s),site_get_susc(s),site_get_userid(s),default_domain);
+	*/
+	sprintf(aux,"A|%s|%lu|%lu|%lu|",site_get_name(s),site_get_id(s),
+	site_get_version(s),site_get_susc(s));
+	strcpy(buffer_tx,aux);
+	sprintf(aux,"%lu|%s",site_get_userid(s),default_domain);
+	strcat(buffer_tx,aux);
+
+	if(worker_send_recive(w,buffer_tx,buffer_rx)){
+		if(buffer_rx[0] == '1'){
+			printf("COmenzamos con los alias!!!\n");
+			/* Enviamos los alias. Puede que requieran varios envios */
+			list_alias_first(site_get_alias(s));
+			strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar
+			while(!list_alias_eol(site_get_alias(s))){
+				alias = list_alias_get(site_get_alias(s));
+				printf("Procesando alias: %s\n",alias_get_name(alias));
+				if(strlen(alias_get_name(alias)) +
+				   strlen(buffer_tx) + 2 > BUFFERSIZE){
+					// Buffer lleno. Enviamos lo que tenemos
+					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
+					buffer_tx[0] = '1';
+					if(!worker_send_recive(w,buffer_tx,buffer_rx)){
+						//Falla del worker al recibir los datos
+						return 0;
+					}
+					strcpy(buffer_tx,"0|");	//El 0 indica que no habria mas datos a enviar
+				}
+				//seguimos publando el buffer
+				strcat(buffer_tx,alias_get_name(alias));
+				strcat(buffer_tx,"|");
+				list_alias_next(site_get_alias(s));
+			}
+			// Enviamos los alias remanentes. Puede que este vacio
+			if(!worker_send_recive(w,buffer_tx,buffer_rx)){
+				//Falla del worker al recibir los datos
+				return 0;
+			}
+			list_site_add(w->sites,s);
+			list_worker_add(site_get_workers(s),w);
+			return 1;
+		}  else {
+			return 0;
+		}
 	} else {
 		// Problemas para contactar al worker
 		return 0;
@@ -303,8 +396,8 @@ int worker_sync(T_worker *w, T_list_site *s){
 			}
 			if(nextdata == 1){
 				if(send(w->socket,"1\0",BUFFERSIZE,0)<0){
-		                        printf("problemas de conectividad\n");
-        		                return worker_reconnect(w);
+					printf("problemas de conectividad\n");
+					return worker_reconnect(w);
 				}
 			}
 		}
@@ -313,7 +406,7 @@ int worker_sync(T_worker *w, T_list_site *s){
 }
 
 /*****************************
-         Proxys
+	 Proxys
 ******************************/
 void proxy_init(T_proxy *p, char *name, char *ip){
 	strcpy(p->name,name);
@@ -327,9 +420,8 @@ char *proxy_get_ip(T_proxy *p){
 }
 
 /*****************************
-         Lista de Workers
+	 Lista de Workers
 ******************************/
-
 void list_worker_init(T_list_worker *l){
 	l->first = NULL;
 	l->actual = NULL;
@@ -439,12 +531,37 @@ T_worker *list_worker_find_id(T_list_worker *l, int worker_id){
 		exist = (worker_get_id(l->actual->data) == worker_id);
 		list_worker_next(l);
 	}
-	/* Si se encontr se retorna. Sino l->actual->data deberia ser NULL */
-	return l->actual->data;
+	if(exist){
+		return l->actual->data;
+	} else {
+		return NULL;
+	}
+}
+
+void list_worker_sort(T_list_worker *l){
+	/* Ordena la lista de menor a mayor por cantidad de
+ 	 * sitios en cada worker */
+
+	T_worker *worker1, *worker2;
+	int i,j;
+
+	for(i=0;i<l->size - 1;i++){
+		list_worker_first(l);
+		for(j=1;j<l->size - i;j++){
+			worker1 = l->actual->data;
+			worker2 = l->actual->next->data;
+			if((list_site_size(worker_get_sites(worker1))) >
+			   (list_site_size(worker_get_sites(worker2)))){
+				l->actual->data = worker2;
+				l->actual->next->data = worker1;
+			}
+			list_worker_next(l);
+		}
+	}
 }
 
 /*****************************
-         Lista de Sitios
+	 Lista de Sitios
 ******************************/
 
 void list_site_init(T_list_site *l){
@@ -566,7 +683,7 @@ void list_site_erase(T_list_site *l){
 }
 
 /*****************************
-         Lista de Proxys
+	 Lista de Proxys
 ******************************/
 
 void list_proxy_init(T_list_proxy *l){
@@ -662,4 +779,79 @@ void list_proxy_erase(T_list_proxy *l){
 	}
 }
 
+/*****************************
+*	 Lista de alias
+******************************/
+void list_alias_init(T_list_alias *l){
+	l->first = NULL;
+	l->actual = NULL;
+	l->last = NULL;
+	l->size = 0;
+}
 
+void list_alias_add(T_list_alias *l, T_alias *a){
+	list_a_node *new;
+	list_a_node *aux;
+
+	new = (list_a_node*)malloc(sizeof(list_a_node));
+	new->next = NULL;
+	new->data = a;
+	l->size++;
+
+	if(l->first == NULL){
+		l->first = new;
+		l->last = new;
+	} else {
+		l->last->next = new;
+		l->last = new;
+	}
+}
+
+void list_alias_first(T_list_alias *l){
+	l->actual = l->first;
+}
+
+void list_alias_next(T_list_alias *l){
+	if(l->actual != NULL){
+		l->actual = l->actual->next;
+	}
+}
+
+T_alias *list_alias_get(T_list_alias *l){
+	return l->actual->data;
+}
+
+unsigned int list_alias_size(T_list_alias *l){
+	return l->size;
+}
+
+int list_alias_eol(T_list_alias *l){
+	return (l->actual == NULL);
+}
+
+T_alias *list_alias_remove(T_list_alias *l){
+	list_a_node *prio;
+	list_a_node *aux;
+	T_alias *element;
+
+	if(l->actual != NULL){
+		aux = l->first;
+		prio = NULL;
+		while(aux != l->actual){
+			prio = aux;
+			aux = aux->next;
+		}
+		if(prio == NULL){
+			l->first = aux->next;
+		} else {
+			prio->next = aux->next;
+		}
+		if(aux == l->last){
+			l->last = prio;
+		}
+		l->actual = aux->next;
+		element = aux->data;
+		free(aux);
+	}
+	return element;
+}

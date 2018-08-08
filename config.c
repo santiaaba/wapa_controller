@@ -42,6 +42,7 @@ int config_load(const char *filename, T_config *conf){
 		if(0 == strcmp(&atr[0],"db_name")){strcpy(conf->db_name,&val[0]);}
 		if(0 == strcmp(&atr[0],"db_user")){strcpy(conf->db_user,&val[0]);}
 		if(0 == strcmp(&atr[0],"db_pass")){strcpy(conf->db_pass,&val[0]);}
+		if(0 == strcmp(&atr[0],"default_domain")){strcpy(conf->default_domain,&val[0]);}
 	}
 	fclose(fp);
 }
@@ -57,4 +58,7 @@ char *config_db_user(T_config *conf){
 }
 char *config_db_pass(T_config *conf){
 	return conf->db_pass;
+}
+char *config_default_domain(T_config *conf){
+	return conf->default_domain;
 }

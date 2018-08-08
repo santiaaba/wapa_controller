@@ -11,7 +11,7 @@
 #define STRUCT_H
 
 #define BUFFERSIZE 1024
-#define TIMEONLINE 5	//tiempo que debe estar en preparado para pasar a online. En segundos
+#define TIMEONLINE 20	//tiempo que debe estar en preparado para pasar a online. En segundos
 
 typedef enum { S_ONLINE, S_OFFLINE} T_site_status;
 typedef enum { W_ONLINE, W_OFFLINE, W_PREPARED, W_BROKEN, W_UNKNOWN} T_worker_status;
@@ -19,11 +19,25 @@ typedef enum { W_ONLINE, W_OFFLINE, W_PREPARED, W_BROKEN, W_UNKNOWN} T_worker_st
 typedef struct list_worker T_list_worker;
 typedef struct list_site T_list_site;
 typedef struct list_proxy T_list_proxy;
+typedef struct list_alias T_list_alias;
 
 /*****************************
           Varios
 ******************************/
 void itowstatus(T_worker_status i, char *name);
+
+/*****************************
+ * 	Alias
+ *****************************/
+typedef struct {
+	char *name;
+	unsigned int id;
+} T_alias;
+
+void alias_init(T_alias *a, unsigned int id, char *name);
+char *alias_get_name(T_alias *a);
+unsigned int alias_get_id(T_alias *a);
+void alias_set_name(T_alias *a);
 
 /*****************************
  	Sitio
@@ -35,7 +49,7 @@ typedef struct {
 	unsigned int size;   //4 bytes
 	unsigned int userid;   //4 bytes
 	unsigned int susc;   //4 bytes
-	char alias[100];  /* Reemplazar por lista de strings */
+	T_list_alias *alias;
 	T_site_status status;
 	T_list_worker *workers;
 } T_site;
@@ -49,7 +63,7 @@ unsigned int site_get_userid(T_site *s);
 unsigned int site_get_susc(T_site *s);
 unsigned int site_get_size(T_site *s);
 unsigned int site_get_real_size(T_site *s);
-char *site_get_alias(T_site *s);
+T_list_alias *site_get_alias(T_site *s);
 T_site_status site_get_status(T_site *s);
 
 /* Retorna la lista de workers */
@@ -65,7 +79,7 @@ typedef struct {
 	int id;
 	T_worker_status status;
 	T_worker_status last_status;
-	time_t time_change_status;
+	unsigned long time_change_status;	//timestamp
 	T_list_site *sites;
 	struct sockaddr_in server;
 	int socket;
@@ -76,13 +90,15 @@ char *worker_get_name(T_worker *w);
 int worker_get_id(T_worker *w);
 T_worker_status worker_get_status(T_worker *w);
 T_worker_status worker_get_last_status(T_worker *w);
+unsigned int worker_get_last_time(T_worker *w);
 char *worker_get_ip(T_worker *w);
 void worker_set_online(T_worker *w);
 void worker_set_offline(T_worker *w);
+T_list_site *worker_get_sites(T_worker *w);
 
 /* Agrega un sitio al worker. Esto implica agregarlo tambien
  * al worker fisico */
-int worker_add_site(T_worker *w, T_site *s);
+int worker_add_site(T_worker *w, T_site *s,char *default_domain);
 
 /* Elimina logicamente los sitios de un worker.*/
 void worker_purge(T_worker *w);
@@ -145,6 +161,10 @@ T_worker *list_worker_remove(T_list_worker *l);
 
 /* retorna el elemento solicitado por su id. NULL si no existe*/
 T_worker *list_worker_find_id(T_list_worker *l, int worker_id);
+
+/* Ordena la lista de workers de menor a mayor por la cantidad de
+ * sitios asignados al worker */
+void list_worker_sort(T_list_worker *l);
 
 /*****************************
  	Lista de Sitios
@@ -216,5 +236,29 @@ unsigned int list_proxy_size(T_list_proxy *l);
 int list_proxy_eol(T_list_proxy *l);
 void list_proxy_remove(T_list_proxy *l);
 void list_proxy_destroy(T_list_proxy *l);
+
+/*****************************
+ *         Lista de alias
+*******************************/
+typedef struct a_node {
+        T_alias *data;
+        struct a_node *next;
+} list_a_node;
+
+struct list_alias {
+        unsigned int size;
+        list_a_node *first;
+        list_a_node *last;
+        list_a_node *actual;
+};
+
+void list_alias_init(T_list_alias *l);
+void list_alias_add(T_list_alias *l, T_alias *a);
+void list_alias_first(T_list_alias *l);
+void list_alias_next(T_list_alias *l);
+T_alias *list_alias_get(T_list_alias *l);
+unsigned int list_alias_size(T_list_alias *l);
+int list_alias_eol(T_list_alias *l);
+T_alias *list_alias_remove(T_list_alias *l);
 
 #endif
