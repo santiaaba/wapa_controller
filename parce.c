@@ -11,7 +11,6 @@ void parce_data(char *buffer, int *i, char *value){
 	int largo;
 
 	largo = strlen(buffer);
-	printf("Parceando %s\n",buffer);
 	while(*i < largo && buffer[*i] != '|' && buffer[*i] != '\0'){
 		//printf("la i es: %i\n",*i);
 		//printf("%c\n",buffer[*i]);

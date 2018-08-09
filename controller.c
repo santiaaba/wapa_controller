@@ -148,30 +148,31 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers, T_config *config
 	T_list_worker candidates;
 	int siterealsize;
 
-	printf("----- NORMALICE ----\n");
+	printf("\n----- NORMALICE ----\n");
 	list_site_first(sites);
 	list_worker_init(&candidates);
 	while(!list_site_eol(sites)){
 		site = list_site_get(sites);
 		siterealsize = site_get_real_size(site);
-		printf("	Revisamos el sitio %s - real %i: need %i\n",site_get_name(site),siterealsize,site_get_size(site));
+		printf("\tRevisamos el sitio %s - real %i: need %i\n",site_get_name(site),siterealsize,site_get_size(site));
 		if(siterealsize < site_get_size(site)){
 			/* Estan faltando workers */
+			printf("\tBorramos posibles workers en lista candidatos\n");
 			list_worker_erase(&candidates);
-			printf("	Seleccionamos los workers\n");
+			printf("\tSeleccionamos los workers\n");
 			select_workers(workers,&candidates,site);
-			printf("	Asignamos los workers\n");
+			printf("\tAsignamos los workers\n");
 			assign_workers(&candidates,site,config);
 		} else {
 			if(siterealsize > site_get_size(site)){
 				/* Estan sobrando workers */
-				printf("	Estan sobrando workers\n");
+				printf("\tEstan sobrando workers\n");
 				des_assign_workers(site);
 			}
 		}
 		list_site_next(sites);
 	}
-	printf("----- FIN NORMALICE ----\n");
+	printf("\n----- FIN NORMALICE ----\n");
 	return 1;
 }
 
@@ -204,14 +205,17 @@ void main(){
 	db_load_workers(&db,&workers);
 	db_load_proxys(&db,&proxys);
 
+	/* Imprimimos la lista de sitios */
+	list_site_first(&sites);
+	while(!list_site_eol(&sites)){
+		printf("sitio cargado %s\n", site_get_name(list_site_get(&sites)));
+		list_site_next(&sites);
+	}
+
 	/* Sincronizamos con la información en workers y proxys */
 	printf("--INI Sincronizamos workers--\n");
 	init_sync(&workers,&sites);
-	/* puede pasar que haya workers que estuvieron con problemas, ahora
-	   funcionan correctamente y al realizar el sync hayan quedado sitios
-	   asignados a mas cantidad de workers de los que deben. Corremos la
-	   funcion normalice_sites */
-	//normalice_sites(&workers,&sites,&config);
+
 	printf("--FIN Sincronizamos workers--\n");
 
 	/* Reconfiguramos los proxys */
@@ -220,16 +224,17 @@ void main(){
 
 	/* Comenzamos el loop del controller */
 	while(1){
+		printf("Entra al LOOP\n");
 		/* Chequeo de workers */
+		sleep(5);
 		check_workers(&workers);
 		
 		/* Chequeo de proxys */
 		//check_proxys(&proxys);
 		
 		/* Asignacion sitios a worker */
-		normalice_sites(&sites, &workers, &config);
+		//normalice_sites(&sites, &workers, &config);
 		
-		sleep(5);
 	}
 
 	/* Finalizamos la conexion a la base */

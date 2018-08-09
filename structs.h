@@ -77,7 +77,7 @@ typedef struct {
 	char name[100];
 	char ip[15];
 	int id;
-	unsigned int load_average;
+	float laverage;
 	T_worker_status status;
 	T_worker_status last_status;
 	unsigned long time_change_status;	//timestamp
@@ -91,12 +91,13 @@ typedef struct {
 void worker_init(T_worker *w, int id, char *name, char *ip, T_worker_status s);
 char *worker_get_name(T_worker *w);
 int worker_get_id(T_worker *w);
+void worker_set_statistics(T_worker *w, char *buffer_rx);
 T_worker_status worker_get_status(T_worker *w);
 T_worker_status worker_get_last_status(T_worker *w);
 unsigned int worker_get_last_time(T_worker *w);
 int worker_check(T_worker *w);
 char *worker_get_ip(T_worker *w);
-unsigned int worker_get_average(T_worker *w);
+float worker_get_load(T_worker *w);
 void worker_set_online(T_worker *w);
 void worker_set_offline(T_worker *w);
 T_list_site *worker_get_sites(T_worker *w);
