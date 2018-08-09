@@ -135,16 +135,21 @@ unsigned int worker_get_last_time(T_worker *w){
 
 void worker_change_status(T_worker *w, T_worker_status s){
 	/* funcion de uso interno */
+	/* Retorna 1 si cambio el estado. 0 en caso contrario */
 	char aux[100];
 	char aux2[100];
 	
+	/* Solo actualizamos el estado si es distinto
+ 	 * del que ya posee */
 	itowstatus(w->last_status,aux);
 	itowstatus(s,aux2);
 	if(w->status != s){
+		printf("change_status: %s -> %s\n",aux,aux2);
 		w->time_change_status = (unsigned long)time(0);
+		w->last_status = w->status;
+		w->status = s;
+		w->is_changed = 1;
 	}
-	w->last_status = w->status;
-	w->status = s;
 }
 
 T_worker_status worker_get_status(T_worker *w){
@@ -181,6 +186,10 @@ char *worker_get_ip(T_worker *w){
 	return w->ip;
 }
 
+unsigned int worker_get_average(T_worker *w){
+	return w-> load_average;
+}
+
 T_list_site *worker_get_sites(T_worker *w){
 	return w->sites;
 }
@@ -199,7 +208,7 @@ void worker_purge(T_worker *w){
 		printf("Obteniendo sitio\n");
 		site = list_site_get(w->sites);
 		printf("PURGE: Removiendo worker del sitio\n");
-		list_worker_remove(site_get_workers(site));
+		list_worker_remove_id(site_get_workers(site),worker_get_id(w));
 		printf("PURGE: proximo sitio\n");
 		list_site_next(w->sites);
 	}
@@ -212,39 +221,33 @@ void worker_purge(T_worker *w){
 	worker_send_recive(w,"P",buffer_rx);
 }
 
-void worker_check(T_worker *w){
+int worker_check(T_worker *w){
 	/* Verifica un worker. Actualiza el estado del mismo */
+	/* Retorna 1 si cambio de estado. 0 En caso contrario */
 
 	char buffer_rx[BUFFERSIZE];
+	int load_average;
 
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
+	
 	printf("Tiempo entre estados %lu - %lu = %lu\n",(unsigned long)time(0),(unsigned long)w->time_change_status,(unsigned long)time(0) - (unsigned long)w->time_change_status);
 	if(w->status != W_OFFLINE){
-		if(!worker_send_recive(w,"C",buffer_rx)){
-			/* No responde */
-			worker_change_status(w,W_UNKNOWN);
-		} else {
+		if(worker_send_recive(w,"C",buffer_rx)){
 			printf("CHECK: -%s-\n",buffer_rx);
+			/* Actualizamos las estadisticas */
+			IMPLEMENTAR!!!!
+			w->load_average = load_average;
 			if(buffer_rx[0] == '1'){
-				/* Responde y pasa el chequeo */
-				if(w->status == W_ONLINE){
-					/* Continua ON_LINE */
-					worker_change_status(w,W_ONLINE);
+				if(w->status == W_BROKEN || w->status == W_UNKNOWN){
+					/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
+					worker_change_status(w,W_PREPARED);
 				} else {
-					if(w->status == W_BROKEN || w->status == W_UNKNOWN){
-						/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
-						worker_change_status(w,W_PREPARED);
-					} else {
-						if((w->status == W_PREPARED) &&
-						   ((unsigned long)time(0) - w->time_change_status) > TIMEONLINE){
-							 /* Responde, pasa el chequeo, 
-							  * ya estaba en PREPARED y paso el tiempo */
-							 worker_change_status(w,W_ONLINE);
-						} else {
-							/* Continua en PREPARED */
-							 worker_change_status(w,W_PREPARED);
-						}
+					if((w->status == W_PREPARED) &&
+					   ((unsigned long)time(0) - w->time_change_status) > TIMEONLINE){
+						 /* Responde, pasa el chequeo, 
+						  * ya estaba en PREPARED y paso el tiempo */
+						 worker_change_status(w,W_ONLINE);
 					}
 				}
 			} else {
@@ -252,6 +255,12 @@ void worker_check(T_worker *w){
 				worker_change_status(w,W_BROKEN);
 			}
 		}
+	}
+	if (w->is_changed){
+		w->is_changed = 0;
+		return 1;
+	} else {
+		return 0;
 	}
 }
 
@@ -482,6 +491,23 @@ int list_worker_eol(T_list_worker *l){
 	return (l->actual == NULL);
 }
 
+T_worker *list_worker_remove_id(T_list_worker *l, int w_id){
+	/* Elimina el worker pasado por parametro */
+
+	int exist = 0;
+	list_w_node *aux;
+
+	l->actual = l->first;
+	while(!exist && l->actual != NULL){
+		if(worker_get_id(l->actual->data) == w_id){
+			printf("list_worker_remove_id: Encontramos el worker a eliminar\n");
+			return list_worker_remove(l);
+		}
+		l->actual = l->actual->next;
+	}
+	return NULL;
+}
+
 T_worker *list_worker_remove(T_list_worker *l){
 	/* Elimina del alista el elemento apuntado por el punero actual.
  	 * El puntero actual pasa al nodo siguiente */
@@ -490,6 +516,7 @@ T_worker *list_worker_remove(T_list_worker *l){
 	list_w_node *aux;
 	T_worker *element;
 
+	printf("list_worker_remove: intentamos eliminar el worker en: %p\n",l->actual);
 	if(l->actual != NULL){
 		aux = l->first;
 		prio = NULL;
@@ -508,6 +535,7 @@ T_worker *list_worker_remove(T_list_worker *l){
 		l->actual = aux->next;
 		element = aux->data;
 		free(aux);
+		l->size--;
 	}
 	return element;
 }
@@ -538,9 +566,8 @@ T_worker *list_worker_find_id(T_list_worker *l, int worker_id){
 	}
 }
 
-void list_worker_sort(T_list_worker *l){
-	/* Ordena la lista de menor a mayor por cantidad de
- 	 * sitios en cada worker */
+void list_worker_sort_by_load(T_list_worker *l,int des){
+	/* Ordena la lista por la carga (load average) del worker */
 
 	T_worker *worker1, *worker2;
 	int i,j;
@@ -550,10 +577,47 @@ void list_worker_sort(T_list_worker *l){
 		for(j=1;j<l->size - i;j++){
 			worker1 = l->actual->data;
 			worker2 = l->actual->next->data;
-			if((list_site_size(worker_get_sites(worker1))) >
-			   (list_site_size(worker_get_sites(worker2)))){
-				l->actual->data = worker2;
-				l->actual->next->data = worker1;
+			if(des){
+				if(worker_get_average(worker1) < worker_get_average(worker2)){
+					l->actual->data = worker2;
+					l->actual->next->data = worker1;
+				}
+			} else {
+				if(worker_get_average(worker1) > worker_get_average(worker2)){
+					l->actual->data = worker2;
+					l->actual->next->data = worker1;
+				}
+			}
+			list_worker_next(l);
+		}
+	}
+}
+
+
+
+void list_worker_sort_by_site(T_list_worker *l,int des){
+	/* Ordena la lista por cantidad de sitios */
+
+	T_worker *worker1, *worker2;
+	int i,j;
+
+	for(i=0;i<l->size - 1;i++){
+		list_worker_first(l);
+		for(j=1;j<l->size - i;j++){
+			worker1 = l->actual->data;
+			worker2 = l->actual->next->data;
+			if(des){
+				if((list_site_size(worker_get_sites(worker1))) <
+				   (list_site_size(worker_get_sites(worker2)))){
+					l->actual->data = worker2;
+					l->actual->next->data = worker1;
+				}
+			} else {
+				if((list_site_size(worker_get_sites(worker1))) >
+				   (list_site_size(worker_get_sites(worker2)))){
+					l->actual->data = worker2;
+					l->actual->next->data = worker1;
+				}
 			}
 			list_worker_next(l);
 		}

@@ -37,6 +37,11 @@ int init_sync(T_list_worker *workers, T_list_site *sites){
 	return 1;
 }
 
+int balance_workers(T_list_worker *workers){
+	/* A implementar */
+	return 1;
+}
+
 int check_workers(T_list_worker *workers){
 	/* Verifica el estado de un worker y en base al mismo toma acciones. */
 	
@@ -48,27 +53,33 @@ int check_workers(T_list_worker *workers){
 	list_worker_first(workers);
 	while(!list_worker_eol(workers)){
 		worker = list_worker_get(workers);
-		printf("Solicitamos check al worker\n");
-		worker_check(worker);
-		printf("comparamos resultado obtenido\n");
-		itowstatus(worker_get_status(worker),status);
-		itowstatus(worker_get_last_status(worker),last_status);
-		printf("status %s - last_status %s\n",status,last_status);
-		if((worker_get_status(worker) == W_ONLINE) && (worker_get_last_status(worker) == W_PREPARED)){
-			printf("Worker %s paso de PREPARED a ONLINE.\n",worker_get_name(worker));
-			/* Worker se recupera de una falla */
-			worker_purge(worker);
-			/* Debemos balancear posiblemente */
+		
+		printf("\tSolicitamos check al worker %s\n",worker_get_name(worker));
+		if(worker_check(worker)){
+			printf("\tworker cambio de estado\n");
+			itowstatus(worker_get_status(worker),status);
+			itowstatus(worker_get_last_status(worker),last_status);
+			printf("\tlast_status %s -> status %s\n",last_status,status);
+			if((worker_get_status(worker) == W_PREPARED)){
+				/* Worker se recupera de una falla */
+				worker_purge(worker);
+			}
+			if((worker_get_status(worker) == W_ONLINE) && (worker_get_last_status(worker) == W_PREPARED)){
+				printf("\tWorker %s paso de PREPARED a ONLINE.\n",worker_get_name(worker));
+				/* Debemos balancear posiblemente */
+				balance_workers(workers);
+			}
+			if((worker_get_status(worker) == W_BROKEN ||
+			   worker_get_status(worker) == W_UNKNOWN) &&
+			   worker_get_last_status(worker) == W_ONLINE){
+				printf("\tWorker %s paso de ONLINE a FALLANDO.\n",worker_get_name(worker));
+				/* Worker estaba online y ha sufrido un fallo */
+				worker_purge(worker);
+				/* El proceso normalice_sites se encargara de asignar los sitios
+ 				 * que se han eliminado del worker con falla */
+			}
 		}
-		if((worker_get_status(worker) == W_BROKEN ||
-		   worker_get_status(worker) == W_UNKNOWN) &&
-		   worker_get_last_status(worker) == W_ONLINE){
-			printf("Worker %s paso de ONLINE a FALLANDO.\n",worker_get_name(worker));
-			/* Worker estaba online y ha sufrido un fallo */
-			worker_purge(worker);
-			/* El proceso normalice_sites se encargara de asignar los sitios
- 			 * que se han eliminado del worker con falla */
-		}
+
 		list_worker_next(workers);
 	}
 	printf("--FIN: Proceso check_workers\n");
@@ -78,12 +89,12 @@ int check_workers(T_list_worker *workers){
 int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *site){
 	/* Selecciona los workers candidatos para asignar un sitio
 	 * que necesite n cantidad de ellos */
-	/* La condicion de momento es workers activos con menos sitios */
+	/* La condicion de momento es workers activos con menor carga (load average) */
 
 	T_worker *worker;
 	char aux[50];
 
-	list_worker_sort(workers);
+	list_worker_sort_by_load(workers,0);
 	list_worker_first(workers);
 	while(site_get_real_size(site) < site_get_size(site)
 	&& !list_worker_eol(workers)){
@@ -119,9 +130,14 @@ int assign_workers(T_list_worker *candidates, T_site *site, T_config *config){
 	return 1;
 }
 
-int des_assign_workers(T_site *site){
-	/* Quita workers de un sitio en el cual excede su cantidad */
-	return 1;
+void des_assign_workers(T_site *site){
+	/* Quita workers de un sitio en el cual excede su cantidad
+	Los workers que se eliminan son los que tengan mayor carga (load average) */
+
+	list_worker_sort_by_load(site_get_workers(site),1);
+	while(site_get_real_size(site) > site_get_size(site)){
+		list_worker_remove(site_get_workers(site));
+	}
 }
 
 int normalice_sites(T_list_site *sites, T_list_worker *workers, T_config *config){
@@ -156,12 +172,6 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers, T_config *config
 		list_site_next(sites);
 	}
 	printf("----- FIN NORMALICE ----\n");
-	return 1;
-}
-
-int balance(T_list_worker *workers){
-	/* Cuando un worker queda fuera de servicio o entra en servicio
-	 * debemos rebalancear los sitios. OJO que puede generar afectación. */
 	return 1;
 }
 

@@ -77,9 +77,12 @@ typedef struct {
 	char name[100];
 	char ip[15];
 	int id;
+	unsigned int load_average;
 	T_worker_status status;
 	T_worker_status last_status;
 	unsigned long time_change_status;	//timestamp
+	int is_changed;		//indica si ha cambiado el estado
+				// worker_change_status lo pone en 1. worker_check lo pone en 0
 	T_list_site *sites;
 	struct sockaddr_in server;
 	int socket;
@@ -91,7 +94,9 @@ int worker_get_id(T_worker *w);
 T_worker_status worker_get_status(T_worker *w);
 T_worker_status worker_get_last_status(T_worker *w);
 unsigned int worker_get_last_time(T_worker *w);
+int worker_check(T_worker *w);
 char *worker_get_ip(T_worker *w);
+unsigned int worker_get_average(T_worker *w);
 void worker_set_online(T_worker *w);
 void worker_set_offline(T_worker *w);
 T_list_site *worker_get_sites(T_worker *w);
@@ -159,12 +164,19 @@ int list_worker_eol(T_list_worker *l);
  * El puntero queda apuntado al elemento siguente */
 T_worker *list_worker_remove(T_list_worker *l);
 
+/* Elimina el worker que posee el id pasado por parametro */
+T_worker *list_worker_remove_id(T_list_worker *l, int worker_id);
+
 /* retorna el elemento solicitado por su id. NULL si no existe*/
 T_worker *list_worker_find_id(T_list_worker *l, int worker_id);
 
-/* Ordena la lista de workers de menor a mayor por la cantidad de
- * sitios asignados al worker */
-void list_worker_sort(T_list_worker *l);
+/* Ordena la lista de workers por la cantidad de sitios asignados.
+ * El segundo parametro es 1 desscendente, 0 ascendente */
+void list_worker_sort_by_site(T_list_worker *l,int des);
+
+/* Ordena la lista de workers por el load average reportado
+ * El segundo parametro es 1 desscendente, 0 ascendente */
+void list_worker_sort_by_load(T_list_worker *l,int des);
 
 /*****************************
  	Lista de Sitios
