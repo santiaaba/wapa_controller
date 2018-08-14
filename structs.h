@@ -15,6 +15,7 @@
 
 typedef enum { S_ONLINE, S_OFFLINE} T_site_status;
 typedef enum { W_ONLINE, W_OFFLINE, W_PREPARED, W_BROKEN, W_UNKNOWN} T_worker_status;
+typedef enum { P_ONLINE, P_OFFLINE, P_PREPARED, P_BROKEN, P_UNKNOWN} T_proxy_status;
 
 typedef struct list_worker T_list_worker;
 typedef struct list_site T_list_site;
@@ -100,6 +101,7 @@ char *worker_get_ip(T_worker *w);
 float worker_get_load(T_worker *w);
 void worker_set_online(T_worker *w);
 void worker_set_offline(T_worker *w);
+int worker_reload(T_worker *w);
 T_list_site *worker_get_sites(T_worker *w);
 
 /* Agrega un sitio al worker. Esto implica agregarlo tambien
@@ -117,13 +119,32 @@ T_worker_status worker_get_status(T_worker *w);
  	Proxy
 ******************************/
 typedef struct {
+	int id;
 	char name[100];
 	char ip[15];
+	float laverage;
+	T_proxy_status status;
+	T_proxy_status last_status;
+	unsigned long time_change_status;	//timestamp
+	int is_changed;		//indica si ha cambiado el estado
+				// worker_change_status lo pone en 1. worker_check lo pone en 0
+	struct sockaddr_in server;
+	int socket;
 } T_proxy;
 
-void proxy_init(T_proxy *p, char *name, char *ip);
+void proxy_init(T_proxy *p, int id, char *name, char *ip, T_proxy_status s);
 char *proxy_get_name(T_proxy *p);
+int proxy_get_id(T_proxy *p);
+void proxy_set_statistics(T_proxy *p, char *buffer_rx);
+T_proxy_status proxy_get_status(T_proxy *p);
+T_proxy_status proxy_get_last_status(T_proxy *p);
+unsigned int proxy_get_last_time(T_proxy *p);
+int proxy_check(T_proxy *p);
 char *proxy_get_ip(T_proxy *p);
+float proxy_get_load(T_proxy *p);
+void proxy_set_online(T_proxy *p);
+void proxy_set_offline(T_proxy *p);
+int proxy_reload(T_proxy *p);
 
 /*****************************
  	Lista de Workers

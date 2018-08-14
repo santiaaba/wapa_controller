@@ -1,9 +1,9 @@
 #include "parce.h"
 
-void parce_data(char *buffer, int *i, char *value){
+void parce_data(char *buffer, char sep, int *i, char *value){
 	/* Dado un comando recibido desde el servidor con formato
- 	 * de campos separados por |, retorna el valor a partir
-	 * de la posición dada hasta el proximo | o fin del string.
+ 	 * de campos separados por el parametro "sep" , retorna el valor a partir
+	 * de la posición dada hasta el proximo "sep" o fin del string.
 	 * Retorna ademas la posición fin en i. los datos comienzan
 	 * en la posicion 3*/
 
@@ -11,9 +11,7 @@ void parce_data(char *buffer, int *i, char *value){
 	int largo;
 
 	largo = strlen(buffer);
-	while(*i < largo && buffer[*i] != '|' && buffer[*i] != '\0'){
-		//printf("la i es: %i\n",*i);
-		//printf("%c\n",buffer[*i]);
+	while(*i < largo && buffer[*i] != sep && buffer[*i] != '\0'){
 		value[j] = buffer[*i];
 		j++; (*i)++;
 	}
@@ -21,5 +19,4 @@ void parce_data(char *buffer, int *i, char *value){
 	/* Adelantamos la i una posicion ya que se
 	 * encuentra parada en el caracter "|" posiblemente */
 	(*i)++;
-	//printf("valor: %s\n",value);
 }

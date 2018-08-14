@@ -74,14 +74,15 @@ void db_load_proxys(T_db *db, T_list_proxy *l){
 	MYSQL_ROW row;
 	T_proxy *new_proxy;
 
-	strcpy(query,"select * from site");
+	strcpy(query,"select id,name,ipv4,status from proxy");
 
 	mysql_query(db->con,query);
 	MYSQL_RES *result = mysql_store_result(db->con);
 
 	while ((row = mysql_fetch_row(result))){
+		printf("Cargando Proxy %s\n",row[1]);
 		new_proxy = (T_proxy*)malloc(sizeof(T_proxy));
-		proxy_init(new_proxy,row[1],row[2]);
+		proxy_init(new_proxy,atoi(row[0]),row[1],row[2],atoi(row[3]));
 		list_proxy_add(l,new_proxy);
 	}
 }

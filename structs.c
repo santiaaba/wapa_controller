@@ -118,11 +118,8 @@ int worker_connect(T_worker *w){
 	/* Funcion de uso interno */
 	/* Intenta conectarse al worker */
 
-	printf("Worker %s intenta conectar %p\n",w->name,&(w->socket));
 	close(w->socket);
-	printf("Worker %s intenta conectar paso\n",w->name);
 	w->socket = socket(AF_INET , SOCK_STREAM , 0);
-	printf("Worker %s intenta conectar paso paso\n",w->name);
 	if (connect(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server)) < 0){
 		printf("Worker %s NO CONECTA\n",w->name);
 		return 0;
@@ -183,7 +180,6 @@ void worker_set_online(T_worker *w){
 
 void worker_set_offline(T_worker *w){
 	worker_change_status(w,W_OFFLINE);
-	worker_end_connect(w);
 }
 
 char *worker_get_name(T_worker *w){
@@ -236,10 +232,10 @@ void worker_set_statistics(T_worker *w, char *buffer_rx){
  	 * en base a lo que recibe del worker fisico */
 	char aux[10];
 	int pos=2;
-	parce_data(buffer_rx,&pos,aux); // Obtiene el mensaje
-	parce_data(buffer_rx,&pos,aux); // average 1 min
-	parce_data(buffer_rx,&pos,aux); // average 5 min
-	parce_data(buffer_rx,&pos,aux); // average 15 min
+	parce_data(buffer_rx,'|',&pos,aux); // Obtiene el mensaje
+	parce_data(buffer_rx,'|',&pos,aux); // average 1 min
+	parce_data(buffer_rx,'|',&pos,aux); // average 5 min
+	parce_data(buffer_rx,'|',&pos,aux); // average 15 min
 	w->laverage = atof(aux);
 }
 
@@ -395,10 +391,10 @@ int worker_sync(T_worker *w, T_list_site *s){
 	do{
 		// El primer valor de los datos es un 1 o un 0. Es un 1 si hay mas datos
 		// para recibir luego de estos
-		parce_data(buffer_rx,&pos,aux);
+		parce_data(buffer_rx,'|',&pos,aux);
 		nextdata = atoi(aux);
 		while(strlen(buffer_rx) > 0 && pos < strlen(buffer_rx)){
-			parce_data(buffer_rx,&pos,aux);
+			parce_data(buffer_rx,'|',&pos,aux);
 			site = list_site_find_id(s,atoi(aux));
 			if(site){
 				list_site_add(w->sites,site);
@@ -418,18 +414,273 @@ int worker_sync(T_worker *w, T_list_site *s){
 	return 1;
 }
 
+int worker_reload(T_worker *w){
+	/* Le indica a un proxy que recargue su configuracion */
+	char buffer_tx[BUFFERSIZE];
+
+	return(worker_send_recive(w,"R\0",buffer_tx));
+}
+
 /*****************************
 	 Proxys
 ******************************/
-void proxy_init(T_proxy *p, char *name, char *ip){
+void proxy_init(T_proxy *p, int id, char *name, char *ip, T_proxy_status s){
 	strcpy(p->name,name);
 	strcpy(p->ip,ip);
+	p->id = id;
+	p->laverage = 0.0;
+	p->server.sin_addr.s_addr = inet_addr(ip);
+	p->server.sin_family = AF_INET;
+	p->server.sin_port = htons(3550);
+	p->status = s;
+	p->last_status = s;
+	p->time_change_status = time(0);
+	p->is_changed = 0;
+	proxy_connect(p);
 }
+
+int proxy_connect(T_proxy *p){
+        /* Funcion de uso interno */
+        /* Intenta conectarse al proxy */
+
+        close(p->socket);
+        p->socket = socket(AF_INET , SOCK_STREAM , 0);
+        if (connect(p->socket , (struct sockaddr *) &(p->server) , sizeof(p->server)) < 0){
+                printf("Proxy %s NO CONECTA\n",p->name);
+                return 0;
+        }
+        printf("Proxy %s CONECTO\n",p->name);
+        return 1;
+}
+
+unsigned int proxy_get_last_time(T_proxy *p){
+        return p->time_change_status;
+}
+
+void proxy_change_status(T_proxy *p, T_proxy_status s){
+        /* funcion de uso interno */
+        /* Retorna 1 si cambio el estado. 0 en caso contrario */
+        char aux[100];
+        char aux2[100];
+
+        /* Solo actualizamos el estado si es distinto
+         * del que ya posee */
+        itowstatus(p->last_status,aux);
+        itowstatus(s,aux2);
+        if(p->status != s){
+                printf("change_status: %s -> %s\n",aux,aux2);
+                p->time_change_status = (unsigned long)time(0);
+                p->last_status = p->status;
+                p->status = s;
+                p->is_changed = 1;
+        }
+}
+
+T_proxy_status proxy_get_status(T_proxy *p){
+        return p->status;
+}
+
+T_proxy_status proxy_get_last_status(T_proxy *p){
+        return p->last_status;
+}
+
+int proxy_get_id(T_proxy *p){
+        return p->id;
+}
+
+void proxy_set_online(T_proxy *p){
+        proxy_change_status(p,P_PREPARED);
+}
+
+void proxy_set_offline(T_proxy *p){
+        proxy_change_status(p,P_OFFLINE);
+}
+
 char *proxy_get_name(T_proxy *p){
 	return p->name;
 }
 char *proxy_get_ip(T_proxy *p){
 	return p->ip;
+}
+
+float proxy_get_load(T_proxy *p){
+        return p->laverage;
+}
+
+void proxy_set_statistics(T_proxy *p, char *buffer_rx){
+        /* Funcion interna. Actualiza las estadisticas
+         * en base a lo que recibe del proxy fisico */
+        char aux[10];
+        int pos=2;
+        parce_data(buffer_rx,'|',&pos,aux); // Obtiene el mensaje
+        parce_data(buffer_rx,'|',&pos,aux); // average 1 min
+        parce_data(buffer_rx,'|',&pos,aux); // average 5 min
+        parce_data(buffer_rx,'|',&pos,aux); // average 15 min
+        p->laverage = atof(aux);
+}
+
+int proxy_add_site(T_proxy *p, T_site *s, char *default_domain){
+	/* Reconfigura el proxy para el sitio indicado */
+
+	char buffer_rx[BUFFERSIZE];
+	char buffer_tx[BUFFERSIZE];
+	T_alias *alias;
+	T_worker *worker;
+	char aux[512];
+
+	/* instruccion a enviar A|<site_id>|<site_version>|<site name>|<default_domain> */
+	sprintf(buffer_tx,"A|%s|%s|%lu|%i",site_get_name(s),default_domain,
+		site_get_id(s),site_get_version(s));
+
+	if(proxy_send_recive(p,buffer_tx,buffer_rx)){
+		if(buffer_rx[0] == '1'){
+			printf("pasamos a enviar los workers\n");
+			/* Enviamos los workers. Puede que requieran varios envios */
+			list_worker_first(site_get_workers(s));
+			strcpy(buffer_tx,"0|");         //El 0 indica que no habria mas datos a enviar luego
+			while(!list_worker_eol(site_get_workers(s))){
+				worker = list_worker_get(site_get_workers(s));
+				printf("Adjuntando worker %s\n",worker_get_name(worker));
+
+				if(strlen(worker_get_name(worker)) +
+				   strlen(buffer_tx) + 2 > BUFFERSIZE){
+					// Buffer lleno. Enviamos lo que tenemos
+					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
+					buffer_tx[0] = '1';
+					if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+						//Falla del proxy al recibir los datos
+						return 0;
+					}
+					strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
+				}
+				//seguimos publando el buffer
+				strcat(buffer_tx,worker_get_name(worker));
+				strcat(buffer_tx,"|");
+				list_worker_next(site_get_workers(s));
+			}
+			// Enviamos los workers remanentes. Puede que este vacio
+			printf("Enviando remanente:%s\n",buffer_tx);
+			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+				//Falla del proxy al recibir los datos
+				return 0;
+			}
+
+			printf("COmenzamos con los alias!!!\n");
+			/* Enviamos los alias. Puede que requieran varios envios */
+			list_alias_first(site_get_alias(s));
+			strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar luego
+			while(!list_alias_eol(site_get_alias(s))){
+				alias = list_alias_get(site_get_alias(s));
+				if(strlen(alias_get_name(alias)) +
+				   strlen(buffer_tx) + 2 > BUFFERSIZE){
+					// Buffer lleno. Enviamos lo que tenemos
+					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
+					buffer_tx[0] = '1';
+					if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+						//Falla del proxy al recibir los datos
+						return 0;
+					}
+					strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
+				}
+				//seguimos publando el buffer
+				strcat(buffer_tx,alias_get_name(alias));
+				strcat(buffer_tx,"|");
+				list_alias_next(site_get_alias(s));
+			}
+			// Enviamos los alias remanentes. Puede que este vacio
+			printf("Enviando remanente:%s\n",buffer_tx);
+			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+				//Falla del proxy al recibir los datos
+				return 0;
+			}
+			return 1;
+		} else {
+			return 0;
+		}
+	} else {
+		// Problemas para contactar al proxy
+		return 0;
+	}
+}
+
+int proxy_reload(T_proxy *p){
+	/* Le indica a un proxy que recargue su configuracion */
+	char buffer_tx[BUFFERSIZE];
+
+	return(proxy_send_recive(p,"R\0",buffer_tx));
+}
+
+int proxy_check(T_proxy *p){
+        /* Verifica un proxy. Actualiza el estado del mismo */
+        /* Retorna 1 si cambio de estado. 0 En caso contrario */
+
+        char buffer_rx[BUFFERSIZE];
+
+        /* Verificamos si responde correctamente */
+        /* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
+
+        printf("Tiempo entre estados %lu - %lu = %lu\n",(unsigned long)time(0),
+                (unsigned long)p->time_change_status,
+                (unsigned long)time(0) - (unsigned long)p->time_change_status);
+        if(p->status != P_OFFLINE){
+                if(proxy_send_recive(p,"C",buffer_rx)){
+                        printf("CHECK: -%s-\n",buffer_rx);
+                        /* Actualizamos las estadisticas */
+                        proxy_set_statistics(p, buffer_rx);
+                        if(buffer_rx[0] == '1'){
+                                if(p->status == P_BROKEN || p->status == P_UNKNOWN){
+                                        /* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
+                                        proxy_change_status(p,P_PREPARED);
+                                } else {
+                                        if((p->status == P_PREPARED) &&
+                                           ((unsigned long)time(0) - p->time_change_status) > TIMEONLINE){
+                                                 /* Responde, pasa el chequeo,
+                                                  * ya estaba en PREPARED y paso el tiempo */
+                                                 proxy_change_status(p,P_ONLINE);
+                                        }
+                                }
+                        } else {
+                                printf("proxy %s ROTO!\n",proxy_get_name(p));
+                                proxy_change_status(p,P_BROKEN);
+                        }
+                } else {
+                        printf("proxy %s NO RESPONDE!\n",proxy_get_name(p));
+                }
+        }
+        if (p->is_changed){
+                p->is_changed = 0;
+                return 1;
+        } else {
+                return 0;
+        }
+}
+
+int proxy_send_recive(T_proxy *p, char *command, char *buffer_rx){
+        /* Se conecta al proxy, envia un comando y espera la respuesta */
+
+        int cant_bytes;
+
+        cant_bytes = send(p->socket,command, BUFFERSIZE,0);
+        printf("%s: send_recive %p - enviando(%i): %s\n",p->name,&(p->socket),cant_bytes,command);
+        if(cant_bytes <0){
+                printf("Send_recive: FALLO SEND!!!!\n");
+                /* Fallo la conectividad contra el proxy */
+                proxy_change_status(p,P_UNKNOWN);
+                /* Reintentamos conectar */
+                proxy_connect(p);
+                return 0;
+        }
+        cant_bytes = recv(p->socket,buffer_rx,BUFFERSIZE,0);
+        if(cant_bytes<0){
+                printf("Send_recive: FALLO RECV!!!!\n");
+                /* Fallo la conectividad contr el proxy */
+                proxy_change_status(p,P_UNKNOWN);
+                /* Reintentamos conectar */
+                proxy_connect(p);
+                return 0;
+        }
+        printf("send_recive - recibido(%i): %s\n",cant_bytes,buffer_rx);
+        return 1;
 }
 
 /*****************************
