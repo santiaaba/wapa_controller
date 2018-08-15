@@ -15,6 +15,7 @@ T_list_worker workers;
 T_list_proxy proxys;
 T_list_site sites;
 T_db db;
+T_rest_server rest_server;
 
 /********************************
  * 	FUNCIONES		*
@@ -225,8 +226,6 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers,
  ********************************/
 void main(){
 
-	pthread_t t_rest_server;
-
 	/* Cargamos la configuracion */
 	config_load("controller.conf",&config);
 
@@ -264,10 +263,8 @@ void main(){
 	printf("--FIN Sincronizamos workers--\n");
 
 	/* Iniciamos el server REST para la API */
-	if(0 != pthread_create(&t_rest_server, NULL, &rest_server_function, NULL)){
-		printf ("Imposible levantar el servidor REST\n");
-		exit(2);
-	}
+	rest_server_init(&rest_server);
+	printf("El rest server posee puntero %p\n",rest_server);
 
 	/* Comenzamos el loop del controller */
 	while(1){
