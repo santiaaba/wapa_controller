@@ -2,12 +2,67 @@
 
 /* La variable server_rest debe ser global */
 
-void rest_server_add_job(T_rest_server *r, T_job *j){
-	printf("Agregamos el JOB: %s a la lista\n",job_get_id(j));
-	list_job_add(&(r->jobs),j);
+void rest_server_add_task(T_rest_server *r, T_task *j){
+	printf("Agregamos el JOB: %s a la lista\n",task_get_id(j));
 
-	/* Para debug imprimimis la lista hasta el momento */
-	list_job_print(&(r->jobs));
+	pthread_mutex_lock(&(r->mutex_heap_task));
+		heap_task_push(&(r->tasks_todo),j);
+		/* Para debug imprimimis la lista hasta el momento */
+		heap_task_print(&(r->tasks_todo));
+	pthread_mutex_unlock(&(r->mutex_heap_task));
+
+}
+
+void rest_server_do_task(T_rest_server *r, T_list_site *sites,
+	T_list_worker *workers, T_list_proxy *proxys){
+
+	T_task *task;
+
+	while(1){
+		pthread_mutex_lock(&(r->mutex_heap_task));
+			task = heap_task_pop(&(r->tasks_todo));
+		pthread_mutex_unlock(&(r->mutex_heap_task));
+		if(task != NULL){
+			task_run(task,sites,workers,proxys);
+			pthread_mutex_lock(&(r->mutex_bag_task));
+				bag_task_add(&(r->tasks_done),task);
+			pthread_mutex_unlock(&(r->mutex_bag_task));
+		}
+	}
+}
+
+void rest_server_get_task(T_rest_server *r, T_taskid *taskid, char **result, unsigned int *size){
+	T_task *task;
+	unsigned int total_size;
+
+	pthread_mutex_lock(&(r->mutex_bag_task));
+	pthread_mutex_lock(&(r->mutex_heap_task));
+		/* Buscamos en la bolsa de tareas finalizadas */
+		task = bag_task_pop(&(r->tasks_done),taskid);
+		if(NULL == task){
+			/* Verificamos si esta en la cola de tareas pendientes */
+			if(heap_task_exist(&(r->tasks_todo),(char *)taskid)){
+				/* Tarea existe y esta en espera */
+				sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"WAITH\"",taskid);
+			} else {
+				/* Tarea no existe mas */
+				sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"INEXIST\"",taskid);
+			}
+		} else {
+			/* Tarea existe y ha finalizado */
+			sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"DONE\",\"result\":\"",taskid);
+			total_size = (strlen(*result) + strlen(task_get_result(task)));
+			if(total_size > *size){
+				*result = (char *)realloc(*result,total_size + 10);
+				*size = total_size + 10;
+			}
+			strcat(*result,task_get_result(task));
+			strcat(*result,"\"}");
+			/* Eliminamos el task */
+			task_destroy(&task);
+		}
+	pthread_mutex_unlock(&(r->mutex_heap_task));
+	pthread_mutex_unlock(&(r->mutex_bag_task));
 }
 
 static int send_page(struct MHD_Connection *connection, const char *page){
@@ -30,12 +85,14 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 	int pos=1;
 	int data_size=1000;
 	char *data;
-	T_job *job;
-	T_jobid *jobid;
+	char *result = (char *)malloc(TASKRESULT_SIZE);
+	unsigned int size_result = TASKRESULT_SIZE;
+	T_task *task;
+	T_taskid *taskid;
 
 	/* El token de momento lo inventamos
  	   pero deberia venir en el header del mensaje */
-	T_jobtoken token;
+	T_tasktoken token;
 	random_token(token);
 
 	printf("Se trata de un GET\n");
@@ -49,22 +106,35 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 		if(strlen(value)>0){
 			printf("Nos piden informacion sobre el sitio: %s\n",value);
 			//return send_page (connection, "Acciones sobre el sitio");
-			 job = (T_job *)malloc(sizeof(T_job));
-			job_init(job,&token,J_GET_SITE,value);
+			task = (T_task *)malloc(sizeof(T_task));
+			task_init(task,&token,T_GET_SITE,value);
+			sprintf(result,"{\"task\":\"%s\",\"stauts\":\"TODO\"}",task_get_id(task));
+			rest_server_add_task(&rest_server,task);
 		} else {
 			printf("Nos piden listar los sitios: %s\n",value);
-			job = (T_job *)malloc(sizeof(T_job));
-			job_init(job,&token,J_GET_SITES,value);
+			task = (T_task *)malloc(sizeof(T_task));
+			task_init(task,&token,T_GET_SITES,value);
+			sprintf(result,"{\"task\":\"%s\",\"stauts\":\"TODO\"}",task_get_id(task));
+			rest_server_add_task(&rest_server,task);
 		}
 		/* Solicitamos el listado de sitios */
+	} else if(0 == strcmp("task",value)) {
+		parce_data((char *)url,'/',&pos,value);
+		if(strlen(value)>0){
+			printf("Nos solicitan cómo termino la tarea con id: %s\n",value);
+			result = (char *)malloc(200);
+			rest_server_get_task(&rest_server,(T_taskid *)value,&result,&size_result);
+		} else {
+			strcpy(result,"");
+		}
 	} else {
 		/* ERROR de protocolo. URL mal confeccionada */
 		printf("Error en la URL\n");
-		return send_page (connection, "ERROR");
+		result = "{\"task\":\"\",\"stauts\":\"ERROR\"}";
+		send_page (connection,result);
 		return 0;
 	}
-	rest_server_add_job(&rest_server,job);
-	send_page (connection, "1");
+	send_page (connection, result);
 	return 1;
 }
 
@@ -162,7 +232,10 @@ void *rest_server_start(void *param){
 }
 
 void rest_server_init(T_rest_server *r){
-	list_job_init(&(r->jobs));
+	heap_task_init(&(r->tasks_todo));
+	bag_task_init(&(r->tasks_done));
+	//r->mutex_heap_task = PTHREAD_MUTEX_INITIALIZER;
+	//r->mutex_bag_task = PTHREAD_MUTEX_INITIALIZER;
 	if(0 != pthread_create(&(r->thread), NULL, &rest_server_start, r)){
 		printf ("Imposible levantar el servidor REST\n");
 		exit(2);
