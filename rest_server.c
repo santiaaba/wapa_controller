@@ -6,26 +6,30 @@ void rest_server_add_task(T_rest_server *r, T_task *j){
 	printf("Agregamos el JOB: %s a la lista\n",task_get_id(j));
 
 	pthread_mutex_lock(&(r->mutex_heap_task));
+		printf("ADD_TASK - %s\n",task_get_id(j));
 		heap_task_push(&(r->tasks_todo),j);
 		/* Para debug imprimimis la lista hasta el momento */
-		heap_task_print(&(r->tasks_todo));
+		//heap_task_print(&(r->tasks_todo));
 	pthread_mutex_unlock(&(r->mutex_heap_task));
 
 }
 
-void rest_server_do_task(T_rest_server *r, T_list_site *sites,
-	T_list_worker *workers, T_list_proxy *proxys){
-
+void *rest_server_do_task(void *param){
 	T_task *task;
+	T_rest_server *r= (T_rest_server *)param;
 
 	while(1){
+		sleep(3);
 		pthread_mutex_lock(&(r->mutex_heap_task));
 			task = heap_task_pop(&(r->tasks_todo));
+			printf("DO_TASK - %s\n",task_get_id(task));
 		pthread_mutex_unlock(&(r->mutex_heap_task));
 		if(task != NULL){
-			task_run(task,sites,workers,proxys);
+			task_run(task,r->sites,r->workers,r->proxys);
 			pthread_mutex_lock(&(r->mutex_bag_task));
+				printf("BAG_TASK - %s\n",task_get_id(task));
 				bag_task_add(&(r->tasks_done),task);
+				bag_task_print(&(r->tasks_done));
 			pthread_mutex_unlock(&(r->mutex_bag_task));
 		}
 	}
@@ -37,16 +41,18 @@ void rest_server_get_task(T_rest_server *r, T_taskid *taskid, char **result, uns
 
 	pthread_mutex_lock(&(r->mutex_bag_task));
 	pthread_mutex_lock(&(r->mutex_heap_task));
+		printf("Buscadno TASK ID: %s\n",taskid);
 		/* Buscamos en la bolsa de tareas finalizadas */
+		bag_task_print(&(r->tasks_done));
 		task = bag_task_pop(&(r->tasks_done),taskid);
 		if(NULL == task){
 			/* Verificamos si esta en la cola de tareas pendientes */
 			if(heap_task_exist(&(r->tasks_todo),(char *)taskid)){
 				/* Tarea existe y esta en espera */
-				sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"WAITH\"",taskid);
+				sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"WHAIT\"}",taskid);
 			} else {
 				/* Tarea no existe mas */
-				sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"INEXIST\"",taskid);
+				sprintf(*result,"{\"taskid\":\"%s\",\"status\":\"INEXIST\"}",taskid);
 			}
 		} else {
 			/* Tarea existe y ha finalizado */
@@ -231,7 +237,12 @@ void *rest_server_start(void *param){
 			80, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_END);
 }
 
-void rest_server_init(T_rest_server *r){
+void rest_server_init(T_rest_server *r, T_list_site *sites, T_list_worker *workers,
+	T_list_proxy *proxys){
+
+	r->sites = sites;
+	r->proxys = proxys;
+	r->workers = workers;
 	heap_task_init(&(r->tasks_todo));
 	bag_task_init(&(r->tasks_done));
 	//r->mutex_heap_task = PTHREAD_MUTEX_INITIALIZER;
@@ -240,6 +251,8 @@ void rest_server_init(T_rest_server *r){
 		printf ("Imposible levantar el servidor REST\n");
 		exit(2);
 	}
+	if(0 != pthread_create(&(r->do_task), NULL, &rest_server_do_task, r)){
+		printf ("Imposible levantar el hilo para realizar tareas\n");
+		exit(2);
+	}
 }
-
-

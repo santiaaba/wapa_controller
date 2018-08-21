@@ -19,7 +19,7 @@ void json_sites(char **data, int *size, T_list_site *sites){
 		sprintf(*data,"%s%lu,",*data,site_get_id(site));
 		list_site_next(sites);
 	}
-	*data[strlen(*data)-1] = ']';
+	(*data)[strlen(*data)-1] = ']';
 }
 
 void json_site(char **data, int *size, T_site *site){
