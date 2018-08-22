@@ -86,6 +86,42 @@ static int send_page(struct MHD_Connection *connection, const char *page){
 	return ret;
 }
 
+static int handle_POST(struct MHD_Connection *connection,
+			const char *url,
+			struct connection_info_struct *con_info){
+	int pos=0;
+	char *result = "ACA PROCESAMOS EL POST";
+
+	printf("Aca vamos a processar los POST:\n");
+	/* El token de momento lo inventamos
+ 	   pero deberia venir en el header del mensaje */
+	T_tasktoken token;
+	random_token(token);
+	
+	parce_data((char *)url,'/',&pos,value);
+	if(0 == strcmp("sites",value)){
+		/* Acciones POST sobre un sitio */
+		parce_data((char *)url,'/',&pos,value);
+		if(strlen(value)>0){
+			/* Modificacion de un sitio */
+			task = (T_task *)malloc(sizeof(T_task));
+			task_init(task,&token,T_MOD_SITE,value);
+		} else {
+			/* Es el alta de un sitio */
+			task = (T_task *)malloc(sizeof(T_task));
+			task_init(task,&token,T_ADD_SITE,value);
+		}
+	} else {
+		/* ERROR de protocolo. URL mal confeccionada */
+		printf("Error en la URL\n");
+		result = "{\"task\":\"\",\"stauts\":\"ERROR\"}";
+		send_page (connection,result);
+		return 0;
+	}
+	send_page (connection,result);
+	return 1;
+}
+
 static int handle_GET(struct MHD_Connection *connection, const char *url){
 	char value[100];
 	int pos=1;
@@ -95,6 +131,8 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 	unsigned int size_result = TASKRESULT_SIZE;
 	T_task *task;
 	T_taskid *taskid;
+	int res=1;
+	int isTaskStatus =0;
 
 	/* El token de momento lo inventamos
  	   pero deberia venir en el header del mensaje */
@@ -107,41 +145,45 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 
 	data = (char *)malloc(data_size);
 
+	task = (T_task *)malloc(sizeof(T_task));
 	if(0 == strcmp("sites",value)){
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
-			printf("Nos piden informacion sobre el sitio: %s\n",value);
-			//return send_page (connection, "Acciones sobre el sitio");
-			task = (T_task *)malloc(sizeof(T_task));
 			task_init(task,&token,T_GET_SITE,value);
-			sprintf(result,"{\"task\":\"%s\",\"stauts\":\"TODO\"}",task_get_id(task));
-			rest_server_add_task(&rest_server,task);
+			IMPLEMENTADO!!!!!
 		} else {
-			printf("Nos piden listar los sitios: %s\n",value);
-			task = (T_task *)malloc(sizeof(T_task));
 			task_init(task,&token,T_GET_SITES,value);
-			sprintf(result,"{\"task\":\"%s\",\"stauts\":\"TODO\"}",task_get_id(task));
-			rest_server_add_task(&rest_server,task);
 		}
-		/* Solicitamos el listado de sitios */
+	} else if(0 == strcmp("workers",value)) {
+		parce_data((char *)url,'/',&pos,value);
+		if(strlen(value)>0){
+			task_init(task,&token,T_GET_WORKER,value);
+		} else {
+			task_init(task,&token,T_GET_WORKERS,value);
+		}
+
 	} else if(0 == strcmp("task",value)) {
+		isTaskStatus =1;
+		free(task);
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
 			printf("Nos solicitan cómo termino la tarea con id: %s\n",value);
-			result = (char *)malloc(200);
 			rest_server_get_task(&rest_server,(T_taskid *)value,&result,&size_result);
 		} else {
-			strcpy(result,"");
+			strcpy(result,"{task incorrecto}");
 		}
 	} else {
 		/* ERROR de protocolo. URL mal confeccionada */
 		printf("Error en la URL\n");
 		result = "{\"task\":\"\",\"stauts\":\"ERROR\"}";
-		send_page (connection,result);
-		return 0;
+		res=0;
+	}
+	if(!isTaskStatus){
+		sprintf(result,"{\"task\":\"%s\",\"status\":\"TODO\"}",task_get_id(task));
+		rest_server_add_task(&rest_server,task);
 	}
 	send_page (connection, result);
-	return 1;
+	return res;
 }
 
 static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char *key,
@@ -151,32 +193,26 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
 
 	struct connection_info_struct *con_info = coninfo_cls;
 
-	if (0 == strcmp (key, "name")){
-		if ((size > 0) && (size <= MAXNAMESIZE)){
-			char *answerstring;
-			answerstring = malloc (MAXANSWERSIZE);
-			if (!answerstring)
-				return MHD_NO;
-			snprintf (answerstring, MAXANSWERSIZE, "TODO OK", data);
-			con_info->answerstring = answerstring;
-		} else
-			con_info->answerstring = NULL;
+	if(dictionary_add(&(con_info->data),(char *)key,(char *)data)){
+		/* Si retorna 1 es porque pudo agregar el dato */
+		return MHD_YES;
+	} else {
+		/* Si no pudo retorn 0 y debe ser porque el dato esta repetido */
 		return MHD_NO;
 	}
-	return MHD_YES;
-	
 }
 
 static void request_completed (void *cls, struct MHD_Connection *connection,
 			   void **con_cls, enum MHD_RequestTerminationCode toe){
 
+	printf("Terminamos la conexxion\n");
 	struct connection_info_struct *con_info = *con_cls;
 	if (NULL == con_info)
 		return;
 	if (con_info->connectiontype == POST){
 		MHD_destroy_post_processor (con_info->postprocessor);
-		if (con_info->answerstring)
-			free (con_info->answerstring);
+		printf("Destruimos el diccionario\n");
+		dictionary_destroy(&(con_info->data));
 	}
 	free (con_info);
 	*con_cls = NULL;
@@ -190,10 +226,9 @@ static int answer_to_connection (void *cls, struct MHD_Connection *connection,
 	if (NULL == *con_cls){
 		struct connection_info_struct *con_info;
 		con_info = malloc (sizeof (struct connection_info_struct));
+		dictionary_init(&(con_info->data));
 		if (NULL == con_info)
 			return MHD_NO;
-		con_info->answerstring = NULL;
-
 		if (0 == strcmp (method, "POST")){
 			con_info->postprocessor = 
 				MHD_create_post_processor (connection, POSTBUFFERSIZE,
@@ -216,14 +251,17 @@ static int answer_to_connection (void *cls, struct MHD_Connection *connection,
 		return handle_GET(connection,url);
 	}
 	if (0 == strcmp (method, "POST")){
+		printf("Entramos POST\n");
 		struct connection_info_struct *con_info = *con_cls;
 		if (*upload_data_size != 0){
 			MHD_post_process (con_info->postprocessor, upload_data,
 					*upload_data_size);
 			*upload_data_size = 0;
 			return MHD_YES;
-		} else if (NULL != con_info->answerstring)
-			return send_page (connection, con_info->answerstring);
+		} else {
+			printf("Entrando manejador del POST %s\n",url);
+			return handle_POST(connection,url,con_info);
+		}
 	}
 	return send_page(connection, "TODO MAL");
 }
@@ -234,7 +272,8 @@ void *rest_server_start(void *param){
 
 	printf("Levantando el demonio REST\n");
 	r-> rest_daemon = MHD_start_daemon (MHD_USE_THREAD_PER_CONNECTION | MHD_USE_DEBUG,
-			80, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_END);
+			80, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_NOTIFY_COMPLETED,
+			request_completed, NULL, MHD_OPTION_END);
 }
 
 void rest_server_init(T_rest_server *r, T_list_site *sites, T_list_worker *workers,

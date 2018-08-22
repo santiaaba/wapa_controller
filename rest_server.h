@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "json.h"
+#include "dictionary.h"
 #include "task.h"
 
 #define PORT		8888
@@ -28,7 +29,8 @@ typedef struct t_r_server {
 
 struct connection_info_struct {
 	int connectiontype;
-	char *answerstring;
+	T_dictionary data;
+	//char *answerstring;
 	struct MHD_PostProcessor *postprocessor;
 };
 

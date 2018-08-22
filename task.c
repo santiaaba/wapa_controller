@@ -7,6 +7,7 @@ void random_task_id(T_taskid value){
 
 	for(j=0;j<TASKID_SIZE;j++){
 		i = rand() % 62;
+		//printf("i=%i\n",i);
 		value[j] = string[i];
 	}
 }
@@ -20,6 +21,20 @@ void random_token(T_tasktoken value){
 		i = rand() % 62;
 		value[j] = string[i];
 	}
+}
+
+void random_dir(char *dir){
+	/* Genera un dir y sub dir de dos digitos cada uno */
+	char *string = "0123456789";
+	int i,j;
+
+	for(j=0;j<5;j++){
+		if(j==2)
+			dir[j]='/';
+		i = rand() % 10;
+		dir[j] = string[i];
+	}
+	dir[5]='\0';
 }
 
 /*****************************
@@ -47,7 +62,6 @@ void task_get_sites(T_task *t, T_list_site *l){
 }
 
 void task_get_site(T_task *t, T_list_site *l){
-	//t->data debe ser un id valido de sitio
 	json_site(&(t->result),&(t->result_size),list_site_find_id(l,atoi(t->data)));
 }
 
@@ -74,6 +88,39 @@ char *tob_get_id(T_task *t){
 }
 
 void task_add_site(T_task *t, T_list_site *l){
+	/* Agrega un sitio a la solucion */
+
+	T_site *newsite;
+	char sql[300];
+	char name[200];
+	char susc_id[300];
+	char dir[6];
+	char command[300];
+	int pos=0;
+	
+	// Obtenemos la id de suscripcion
+	parce_data(t->data,'|',&pos,susc_id);
+	parce_data(t->data,'|',&pos,name);
+
+	// Creacion del espacio de almacenamiento
+	random_dir(dir);
+	printf("Creamos el directorio %s\n",dir);
+	sprintf(command,"mkdir -p /websites/%s/wwwroot");
+	printf("%s\n",command);
+	sprintf(command,"mkdir -p /websites/%s/logs");
+	printf("%s\n",command);
+
+	// Alta en la base de datos del sitio
+	sprintf(sql,"insert into site(version,name,size,susc_id,dir) values(1,\"%s\",1,\"%s\",\"%s\")",
+		name,susc_id,dir);
+	printf("Agregamos a la base de datos: %s\n",sql);
+	
+	// Creacion del sitio
+	/*
+	newsite = (T_site *)malloc(size(T_site));
+	site_init(newsite,name,id,userid,susc,version,size);
+	list_site_add(l,newsite);
+	*/
 }
 
 void task_del_site(T_task *t, T_list_site *l){
@@ -205,55 +252,55 @@ void heap_task_print(T_heap_task *h){
 
 void bag_task_init(T_bag_task *b){
 	b->first = NULL;
-        b->actual = NULL;
-        b->last = NULL;
-        b->size = 0;
+	b->actual = NULL;
+	b->last = NULL;
+	b->size = 0;
 }
 
 void bag_task_add(T_bag_task *b, T_task *t){
 	bag_t_node *new;
-        bag_t_node *aux;
+	bag_t_node *aux;
 
-        printf("Entroooo\n");
-        new = (bag_t_node*)malloc(sizeof(bag_t_node));
-        new->next = NULL;
-        new->data = t;
-        b->size++;
+	printf("Entroooo\n");
+	new = (bag_t_node*)malloc(sizeof(bag_t_node));
+	new->next = NULL;
+	new->data = t;
+	b->size++;
 
-        if(b->first == NULL){
-                b->first = new;
-                b->last = new;
-        } else {
-                b->last->next = new;
-                b->last = new;
-        }
+	if(b->first == NULL){
+		b->first = new;
+		b->last = new;
+	} else {
+		b->last->next = new;
+		b->last = new;
+	}
 }
 
 T_task *bag_site_remove(T_bag_task *b){
-        bag_t_node *prio;
-        bag_t_node *aux;
-        T_task *element = NULL;
+	bag_t_node *prio;
+	bag_t_node *aux;
+	T_task *element = NULL;
 
-        if(b->actual != NULL){
-                aux = b->first;
-                prio = NULL;
-                while(aux != b->actual){
-                        prio = aux;
-                        aux = aux->next;
-                }
-                if(prio == NULL){
-                        b->first = aux->next;
-                } else {
-                        prio->next = aux->next;
-                }
-                if(aux == b->last){
-                        b->last = prio;
-                }
-                b->actual = aux->next;
-                element = aux->data;
-                free(aux);
-        }
-        return element;
+	if(b->actual != NULL){
+		aux = b->first;
+		prio = NULL;
+		while(aux != b->actual){
+			prio = aux;
+			aux = aux->next;
+		}
+		if(prio == NULL){
+			b->first = aux->next;
+		} else {
+			prio->next = aux->next;
+		}
+		if(aux == b->last){
+			b->last = prio;
+		}
+		b->actual = aux->next;
+		element = aux->data;
+		free(aux);
+	}
+	return element;
 }
 
 T_task *bag_task_pop(T_bag_task *b, T_taskid *id){
@@ -265,12 +312,14 @@ T_task *bag_task_pop(T_bag_task *b, T_taskid *id){
 	T_task *taux = NULL;
 
 	b->actual = b->first;
-        while((b->actual != NULL) && !exist){
-                exist = (strcmp(task_get_id(b->actual->data),(char *)id)==0);
-		if(b->actual != NULL)
-        	        b->actual = b->actual->next;
-        }
-        if(exist)
+	while((b->actual != NULL) && !exist){
+		printf("Comparamos -%s- con -%s-\n",id,task_get_id(b->actual->data));
+		exist = (strcmp(task_get_id(b->actual->data),(char *)id)==0);
+		if((!exist && (b->actual != NULL))){
+			b->actual = b->actual->next;
+		}
+	}
+	if(exist)
 		taux = bag_site_remove(b);
 	return taux;
 }
@@ -278,3 +327,17 @@ T_task *bag_task_pop(T_bag_task *b, T_taskid *id){
 unsigned int bag_task_size(T_bag_task *b){
 	return b->size;
 }
+
+void bag_task_print(T_bag_task *b){
+
+	bag_t_node *aux;
+
+	printf("PRINT BAG\n");
+	aux = b->first;
+	while(aux!= NULL){
+		printf("Job_ID: %s\n",task_get_id(aux->data));
+		aux = aux->next;
+	}
+	printf("END PRINT BAG\n");
+}
+
