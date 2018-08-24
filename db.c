@@ -20,13 +20,36 @@ const char *db_error(T_db *db){
 	return mysql_error(db->con);
 }
 
+int db_find_site(T_db *db, char *name){
+	/* Determina si un sitio ya existe en la base de datos */
+
+	char query[200];
+	int resultado;
+	MYSQL_ROW row;
+
+	sprintf(query,"select count(*) from site where name='%s'",name);
+	printf("Pasamos 1: %s\n",query);
+	mysql_query(db->con,query);
+	printf("Pasamos 2\n");
+	MYSQL_RES *result = mysql_store_result(db->con);
+	printf("Pasamos 3\n");
+	row = mysql_fetch_row(result);
+	if(atoi(row[0]) == 0){
+		printf("Sitio no existe!!!\n");
+		return 0;
+	} else {
+		printf("Sitio EXISTE!!!\n");
+		return 1;
+	}
+}
+
 void db_load_sites(T_db *db, T_list_site *l){
 	char query[200];
 	MYSQL_ROW row, row_alias;
 	T_site *new_site;
 	T_alias *new_alias;
 
-	strcpy(query,"select s.*, c.user_id from site s inner join suscription c on s.susc_id = c.id");
+	strcpy(query,"select * from site");
 
 	mysql_query(db->con,query);
 	MYSQL_RES *result = mysql_store_result(db->con);
@@ -34,7 +57,8 @@ void db_load_sites(T_db *db, T_list_site *l){
 	while ((row = mysql_fetch_row(result))){
 		new_site = (T_site*)malloc(sizeof(T_site));
 		printf("DB ID: %i SUSC: %i\n",atoi(row[5]),atoi(row[4]));
-		site_init(new_site,row[2],atoi(row[0]),atoi(row[5]),atoi(row[4]),atoi(row[1]),atoi(row[3]));
+		
+		site_init(new_site,row[2],atoi(row[0]),row[5],atoi(row[1]),atoi(row[3]));
 
 		/* Cargamos los alias */
 		sprintf(query,"select id,alias from alias where site_id=%s\n",row[0]);
@@ -84,5 +108,31 @@ void db_load_proxys(T_db *db, T_list_proxy *l){
 		new_proxy = (T_proxy*)malloc(sizeof(T_proxy));
 		proxy_init(new_proxy,atoi(row[0]),row[1],row[2],atoi(row[3]));
 		list_proxy_add(l,new_proxy);
+	}
+}
+
+int db_add_site(T_db *db, T_site **newsite, char *name, char *dir, unsigned int susc_id){
+	/* Agrega un sitio a la base de datos.
+ 	 * Si no pudo hacerlo retorna 0 sino 1 */
+
+	char query[300];
+	MYSQL_RES *result;
+	unsigned int site_id;
+	
+
+	sprintf(query,"insert into site(version,name,size,susc_id,dir) values(1,\"%s\",1,%lu,\"%s\")",
+                name,susc_id,dir);
+
+	mysql_query(db->con,query);
+	if ((result = mysql_store_result(db->con)) == 0 &&
+		mysql_field_count(db->con) == 0 &&
+		mysql_insert_id(db->con) != 0){
+		
+		site_id = mysql_insert_id(db->con);
+		(*newsite) = (T_site *)malloc(sizeof(T_site));
+		site_init(*newsite,name,site_id,dir,1,1);
+		return 1;
+	} else {
+		return 0;
 	}
 }

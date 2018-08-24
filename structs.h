@@ -48,20 +48,18 @@ typedef struct {
 	unsigned int version;
 	char name[100];
 	unsigned int size;   //4 bytes
-	unsigned int userid;   //4 bytes
-	unsigned int susc;   //4 bytes
+	char dir[5];   //Directorio
 	T_list_alias *alias;
 	T_site_status status;
 	T_list_worker *workers;
 } T_site;
 
-void site_init(T_site *s, char *name, unsigned int id, unsigned int userid,
-               unsigned int susc, unsigned int version, unsigned int size);
+void site_init(T_site *s, char *name, unsigned int id, char *dir,
+               unsigned int version, unsigned int size);
 unsigned int site_get_id(T_site *s);
 unsigned int site_get_version(T_site *s);
 char *site_get_name(T_site *s);
-unsigned int site_get_userid(T_site *s);
-unsigned int site_get_susc(T_site *s);
+char *site_get_dir(T_site *s);
 unsigned int site_get_size(T_site *s);
 unsigned int site_get_real_size(T_site *s);
 T_list_alias *site_get_alias(T_site *s);

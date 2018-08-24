@@ -7,6 +7,9 @@
 #include "structs.h"
 #include <stdlib.h>
 
+#ifndef DB_H
+#define DB_H
+
 typedef struct db {
 	MYSQL *con;
 } T_db;
@@ -17,4 +20,8 @@ void db_close(T_db *db);
 const char *db_error(T_db *db);
 void db_load_sites(T_db *db, T_list_site *l);
 void db_load_workers(T_db *db, T_list_worker *l);
+int db_find_site(T_db *db, char *name);
 void db_load_proxys(T_db *db, T_list_proxy *l);
+int db_add_site(T_db *db, T_site **newsite, char *name, char *dir, unsigned int susc_id);
+
+#endif

@@ -44,11 +44,8 @@ void json_site(char **data, int *size, T_site *site){
 	strcat(*data,"\",\"site_id\":\"");
 	sprintf(aux,"%lu",site_get_id(site));
 	strcat(*data,aux);
-	strcat(*data,"\",\"user_id\":\"");
-	sprintf(aux,"%lu",site_get_userid(site));
-	strcat(*data,aux);
-	strcat(*data,"\",\"suscrip_id\":\"");
-	sprintf(aux,"%lu",site_get_susc(site));
+	strcat(*data,"\",\"dir\":\"");
+	sprintf(aux,"%s",site_get_dir(site));
 	strcat(*data,aux);
 	strcat(*data,"\",\"status\":\"");
 	sprintf(aux,"%i",site_get_status(site));
@@ -57,7 +54,7 @@ void json_site(char **data, int *size, T_site *site){
 
 	/* Poblamos con las urls */
 	list_alias_first(site_get_alias(site));
-	while(list_alias_eol(site_get_alias(site))){
+	while(!list_alias_eol(site_get_alias(site))){
 		alias = list_alias_get(site_get_alias(site));
 		name = alias_get_name(alias);
 		if(*size < (strlen(name) + 150)){
@@ -72,12 +69,12 @@ void json_site(char **data, int *size, T_site *site){
 		strcat(*data,"\"},");
 		list_alias_next(site_get_alias(site));
 	}
-	*data[strlen(*data)-1] = ']';
+	(*data)[strlen(*data)-1] = ']';
 	strcat(*data,",\"workers\":[");
 
 	/* Poblamos con los workers */
 	list_worker_first(site_get_workers(site));
-	while(list_worker_eol(site_get_workers(site))){
+	while(!list_worker_eol(site_get_workers(site))){
 		worker = list_worker_get(site_get_workers(site));
 		name = worker_get_name(worker);
 		if(*size < (strlen(name) + 50)){
@@ -89,6 +86,6 @@ void json_site(char **data, int *size, T_site *site){
 		strcat(*data,"\"},");
 		list_worker_next(site_get_workers(site));
 	}
-	*data[strlen(*data)-1] = ']';
+	(*data)[strlen(*data)-1] = ']';
 	strcat(*data,"}");
 }

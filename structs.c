@@ -36,17 +36,16 @@ unsigned int alias_get_id(T_alias *a){
 /*****************************
 	 Sitios
 ******************************/
-void site_init(T_site *s, char *name, unsigned int id, unsigned int userid,
-	       unsigned int susc, unsigned int version, unsigned int size){
+void site_init(T_site *s, char *name, unsigned int id, char *dir,
+	       unsigned int version, unsigned int size){
 	s->workers = (T_list_worker*)malloc(sizeof(T_list_worker));
 	s->alias = (T_list_alias*)malloc(sizeof(T_list_alias));
 	list_worker_init(s->workers);
 	list_alias_init(s->alias);
 	strcpy(s->name,name);
+	strcpy(s->dir,dir);
 	s->status = W_ONLINE;
 	s->id = id;
-	s->userid = userid;
-	s->susc = susc;
 	s->version = version;
 	s->size = size;
 }
@@ -63,16 +62,12 @@ unsigned int site_get_version(T_site *s){
 	return s->version;
 }
 
+char *site_get_dir(T_site *s){
+	return s->dir;
+}
+
 char *site_get_name(T_site *s){
 	return s->name;
-}
-
-unsigned int site_get_userid(T_site *s){
-	return s->userid;
-}
-
-unsigned int site_get_susc(T_site *s){
-	return s->susc;
 }
 
 void site_set_size(T_site *s, unsigned int size){
@@ -286,22 +281,12 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 	/* Agrega fisica y logicamente un sitio a un worker.
 	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 
-	char aux[512];
 	char buffer_rx[BUFFERSIZE];
 	char buffer_tx[BUFFERSIZE];
 	T_alias *alias;
 
-	/* hay algun problema con el dato en la posicion de la suscripcion con
-	 * comando siguiente. Asi que debemos buscar otra forma 
- 	 * sprintf(buffer_tx,"A|%s|%lu|%lu|%lu|%lu|%s",site_get_name(s),site_get_id(s),
-	site_get_version(s),site_get_susc(s),site_get_userid(s),default_domain);
-	*/
-	sprintf(aux,"A|%s|%lu|%lu|%lu|",site_get_name(s),site_get_id(s),
-	site_get_version(s),site_get_susc(s));
-	strcpy(buffer_tx,aux);
-	sprintf(aux,"%lu|%s",site_get_userid(s),default_domain);
-	strcat(buffer_tx,aux);
-
+	sprintf(buffer_tx,"A|%s|%lu|%s|",site_get_name(s),site_get_id(s),site_get_dir(s));
+	
 	if(worker_send_recive(w,buffer_tx,buffer_rx)){
 		if(buffer_rx[0] == '1'){
 			printf("COmenzamos con los alias!!!\n");

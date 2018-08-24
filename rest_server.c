@@ -25,7 +25,7 @@ void *rest_server_do_task(void *param){
 			printf("DO_TASK - %s\n",task_get_id(task));
 		pthread_mutex_unlock(&(r->mutex_heap_task));
 		if(task != NULL){
-			task_run(task,r->sites,r->workers,r->proxys);
+			task_run(task,r->sites,r->workers,r->proxys,r->db);
 			pthread_mutex_lock(&(r->mutex_bag_task));
 				printf("BAG_TASK - %s\n",task_get_id(task));
 				bag_task_add(&(r->tasks_done),task);
@@ -65,7 +65,9 @@ void rest_server_get_task(T_rest_server *r, T_taskid *taskid, char **result, uns
 			strcat(*result,task_get_result(task));
 			strcat(*result,"\"}");
 			/* Eliminamos el task */
+			printf("ELIMINAMOS EL TASK\n");
 			task_destroy(&task);
+			printf("TASK ELIMINADO\n");
 		}
 	pthread_mutex_unlock(&(r->mutex_heap_task));
 	pthread_mutex_unlock(&(r->mutex_bag_task));
@@ -89,49 +91,63 @@ static int send_page(struct MHD_Connection *connection, const char *page){
 static int handle_POST(struct MHD_Connection *connection,
 			const char *url,
 			struct connection_info_struct *con_info){
-	int pos=0;
-	char *result = "ACA PROCESAMOS EL POST";
+	int pos=1;
+	int ok=1;
+	char value[100];
+	char *result = (char *)malloc(TASKRESULT_SIZE);
+        unsigned int size_result = TASKRESULT_SIZE;
+	T_task *task;
+	T_taskid *taskid;
 
-	printf("Aca vamos a processar los POST:\n");
 	/* El token de momento lo inventamos
  	   pero deberia venir en el header del mensaje */
 	T_tasktoken token;
 	random_token(token);
-	
+
+	/* Le pasamos el puntero del diccionario del
+ 	   parametro con_info a la variable task. OJO
+	   que entonces ya no es responsabilidad del metodo
+	   eliminar la estructura de diccionario. Sino que pasa
+	   a ser responsabilidad del task. */
+
+	task = (T_task *)malloc(sizeof(T_task));
 	parce_data((char *)url,'/',&pos,value);
 	if(0 == strcmp("sites",value)){
 		/* Acciones POST sobre un sitio */
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
+			printf("modif de un sitio\n");
 			/* Modificacion de un sitio */
-			task = (T_task *)malloc(sizeof(T_task));
-			task_init(task,&token,T_MOD_SITE,value);
+			task_init(task,&token,T_MOD_SITE,con_info->data);
 		} else {
+			printf("alta de un sitio\n");
 			/* Es el alta de un sitio */
-			task = (T_task *)malloc(sizeof(T_task));
-			task_init(task,&token,T_ADD_SITE,value);
+			task_init(task,&token,T_ADD_SITE,con_info->data);
 		}
 	} else {
 		/* ERROR de protocolo. URL mal confeccionada */
+		task_destroy(&task);
 		printf("Error en la URL\n");
 		result = "{\"task\":\"\",\"stauts\":\"ERROR\"}";
-		send_page (connection,result);
-		return 0;
+		ok=0;
+	}
+	if(ok){
+		rest_server_add_task(&rest_server,task);
+		sprintf(result,"{\"task\":\"%s\",\"status\":\"TODO\"}",task_get_id(task));
 	}
 	send_page (connection,result);
-	return 1;
+	return ok;
 }
 
 static int handle_GET(struct MHD_Connection *connection, const char *url){
 	char value[100];
 	int pos=1;
-	int data_size=1000;
-	char *data;
+	T_dictionary *data;
 	char *result = (char *)malloc(TASKRESULT_SIZE);
 	unsigned int size_result = TASKRESULT_SIZE;
 	T_task *task;
 	T_taskid *taskid;
-	int res=1;
+	int ok=1;	// Resultado a retornar la funcion
 	int isTaskStatus =0;
 
 	/* El token de momento lo inventamos
@@ -139,30 +155,37 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 	T_tasktoken token;
 	random_token(token);
 
-	printf("Se trata de un GET\n");
-	parce_data((char *)url,'/',&pos,value);
-	printf("valor obtenido: %s\n",value);
-
-	data = (char *)malloc(data_size);
-
 	task = (T_task *)malloc(sizeof(T_task));
+	parce_data((char *)url,'/',&pos,value);
+	printf("Llego\n");
 	if(0 == strcmp("sites",value)){
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
-			task_init(task,&token,T_GET_SITE,value);
-			IMPLEMENTADO!!!!!
+			/* Se solicita info de un sitio */
+			printf("Info de un sitio\n");
+			data = malloc(sizeof(T_dictionary));
+			dictionary_init(data);
+			dictionary_add(data,"id",value);
+			task_init(task,&token,T_GET_SITE,data);
 		} else {
-			task_init(task,&token,T_GET_SITES,value);
+			/* Se solicita listado de sitios */
+			printf("Entramos\n");
+			task_init(task,&token,T_GET_SITES,NULL);
 		}
 	} else if(0 == strcmp("workers",value)) {
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
-			task_init(task,&token,T_GET_WORKER,value);
+			/* Se solicita info de un worker */
+			dictionary_init(data);
+			dictionary_add(data,"id",value);
+			task_init(task,&token,T_GET_WORKER,data);
 		} else {
-			task_init(task,&token,T_GET_WORKERS,value);
+			/* Se solicita listado de workers */
+			task_init(task,&token,T_GET_WORKERS,NULL);
 		}
 
 	} else if(0 == strcmp("task",value)) {
+		/* Se solicita info de un task */
 		isTaskStatus =1;
 		free(task);
 		parce_data((char *)url,'/',&pos,value);
@@ -176,14 +199,14 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 		/* ERROR de protocolo. URL mal confeccionada */
 		printf("Error en la URL\n");
 		result = "{\"task\":\"\",\"stauts\":\"ERROR\"}";
-		res=0;
+		ok=0;
 	}
-	if(!isTaskStatus){
+	if(!isTaskStatus && ok){
 		sprintf(result,"{\"task\":\"%s\",\"status\":\"TODO\"}",task_get_id(task));
 		rest_server_add_task(&rest_server,task);
 	}
 	send_page (connection, result);
-	return res;
+	return ok;
 }
 
 static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char *key,
@@ -193,11 +216,10 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
 
 	struct connection_info_struct *con_info = coninfo_cls;
 
-	if(dictionary_add(&(con_info->data),(char *)key,(char *)data)){
-		/* Si retorna 1 es porque pudo agregar el dato */
+	if(strlen(data)>0){
+		dictionary_add(con_info->data,(char *)key,(char *)data);
 		return MHD_YES;
 	} else {
-		/* Si no pudo retorn 0 y debe ser porque el dato esta repetido */
 		return MHD_NO;
 	}
 }
@@ -205,13 +227,13 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
 static void request_completed (void *cls, struct MHD_Connection *connection,
 			   void **con_cls, enum MHD_RequestTerminationCode toe){
 
-	printf("Terminamos la conexxion\n");
 	struct connection_info_struct *con_info = *con_cls;
 	if (NULL == con_info)
 		return;
 	if (con_info->connectiontype == POST){
 		MHD_destroy_post_processor (con_info->postprocessor);
-		printf("Destruimos el diccionario\n");
+	}
+	if (con_info->connectiontype != POST){
 		dictionary_destroy(&(con_info->data));
 	}
 	free (con_info);
@@ -226,7 +248,8 @@ static int answer_to_connection (void *cls, struct MHD_Connection *connection,
 	if (NULL == *con_cls){
 		struct connection_info_struct *con_info;
 		con_info = malloc (sizeof (struct connection_info_struct));
-		dictionary_init(&(con_info->data));
+		con_info->data = malloc (sizeof (T_dictionary));
+		dictionary_init(con_info->data);
 		if (NULL == con_info)
 			return MHD_NO;
 		if (0 == strcmp (method, "POST")){
@@ -247,11 +270,9 @@ static int answer_to_connection (void *cls, struct MHD_Connection *connection,
 	}
 
 	if (0 == strcmp (method, "GET")){
-		printf("Entrando manejador del GET %s\n",url);
 		return handle_GET(connection,url);
 	}
 	if (0 == strcmp (method, "POST")){
-		printf("Entramos POST\n");
 		struct connection_info_struct *con_info = *con_cls;
 		if (*upload_data_size != 0){
 			MHD_post_process (con_info->postprocessor, upload_data,
@@ -259,7 +280,6 @@ static int answer_to_connection (void *cls, struct MHD_Connection *connection,
 			*upload_data_size = 0;
 			return MHD_YES;
 		} else {
-			printf("Entrando manejador del POST %s\n",url);
 			return handle_POST(connection,url,con_info);
 		}
 	}
@@ -270,18 +290,18 @@ void *rest_server_start(void *param){
 	
 	T_rest_server *r= (T_rest_server *)param;
 
-	printf("Levantando el demonio REST\n");
 	r-> rest_daemon = MHD_start_daemon (MHD_USE_THREAD_PER_CONNECTION | MHD_USE_DEBUG,
 			80, NULL, NULL, &answer_to_connection, NULL, MHD_OPTION_NOTIFY_COMPLETED,
 			request_completed, NULL, MHD_OPTION_END);
 }
 
 void rest_server_init(T_rest_server *r, T_list_site *sites, T_list_worker *workers,
-	T_list_proxy *proxys){
+	T_list_proxy *proxys, T_db *db){
 
 	r->sites = sites;
 	r->proxys = proxys;
 	r->workers = workers;
+	r->db = db;
 	heap_task_init(&(r->tasks_todo));
 	bag_task_init(&(r->tasks_done));
 	//r->mutex_heap_task = PTHREAD_MUTEX_INITIALIZER;

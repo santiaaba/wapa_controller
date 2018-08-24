@@ -3,6 +3,8 @@
 #include "parce.h"
 #include "structs.h"
 #include "json.h"
+#include "dictionary.h"
+#include "db.h"
 
 #ifndef JOB_H
 #define JOB_H
@@ -51,14 +53,15 @@ typedef struct {
 	T_task_user user;		//determina el usuario que es y por las acciones permitidas
 	T_task_type type;		//tipo de accion a realizar
 	T_task_status status;		//estado del task
-	char *data;			//datos para realizar la accion
+	T_dictionary *data;		//datos necesarios para realizar la accion
 	char *result;			//resultado en formato json para retornar.
 	unsigned int result_size;	//datos para realizar la accion
 } T_task;
 
-void task_init(T_task *t, T_tasktoken *token, T_task_type type, char *data);
+void task_init(T_task *t, T_tasktoken *token, T_task_type type, T_dictionary *data);
 void task_destroy(T_task **t);
-void task_run(T_task *t, T_list_site *sites, T_list_worker *workers, T_list_proxy *proxys);
+void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
+	T_list_proxy *proxys,T_db *db);
 T_tasktoken *task_get_token(T_task *t);
 char *task_get_id(T_task *t);
 char *task_get_result(T_task *t);
@@ -67,13 +70,13 @@ void task_get_sites(T_task *t, T_list_site *l);
 void task_get_site(T_task *t, T_list_site *l);
 void task_get_workers(T_task *t, T_list_worker *l);
 void task_get_worker(T_task *t, T_list_worker *l);
-void task_add_site(T_task *t, T_list_site *l);
-void task_del_site(T_task *t, T_list_site *l);
-void task_mod_site(T_task *t, T_list_site *l);
-void task_stop_worker(T_task *t, T_list_worker *l);
-void task_start_worker(T_task *t, T_list_worker *l);
-void task_stop_site(T_task *t, T_list_site *l);
-void task_start_site(T_task *t, T_list_site *l);
+int task_add_site(T_task *t, T_list_site *l, T_db *db);
+int task_del_site(T_task *t, T_list_site *l, T_db *db);
+int task_mod_site(T_task *t, T_list_site *l, T_db *db);
+int task_stop_worker(T_task *t, T_list_worker *l, T_db *db);
+int task_start_worker(T_task *t, T_list_worker *l, T_db *db);
+int task_stop_site(T_task *t, T_list_site *l, T_db *db);
+int task_start_site(T_task *t, T_list_site *l, T_db *db);
 
 /*****************************
          Cola de tareas

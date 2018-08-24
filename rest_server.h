@@ -25,11 +25,12 @@ typedef struct t_r_server {
 	T_list_site *sites;
         T_list_worker *workers;
         T_list_proxy *proxys;
+	T_db *db;
 	} T_rest_server;
 
 struct connection_info_struct {
 	int connectiontype;
-	T_dictionary data;
+	T_dictionary *data;
 	//char *answerstring;
 	struct MHD_PostProcessor *postprocessor;
 };
@@ -44,5 +45,5 @@ struct connection_info_struct {
 extern T_rest_server rest_server;
 
 void rest_server_init(T_rest_server *r, T_list_site *sites,
-			T_list_worker *workers, T_list_proxy *proxys);
+			T_list_worker *workers, T_list_proxy *proxys, T_db *db);
 void rest_server_add_task(T_rest_server *r, T_task *j);

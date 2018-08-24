@@ -29,10 +29,12 @@ void random_dir(char *dir){
 	int i,j;
 
 	for(j=0;j<5;j++){
-		if(j==2)
+		if(j==2){
 			dir[j]='/';
-		i = rand() % 10;
-		dir[j] = string[i];
+		} else {
+			i = rand() % 10;
+			dir[j] = string[i];
+		}
 	}
 	dir[5]='\0';
 }
@@ -41,19 +43,25 @@ void random_dir(char *dir){
 	     TASK 
 ******************************/
 
-void task_init(T_task *t, T_tasktoken *token, T_task_type type, char *data){
+void task_init(T_task *t, T_tasktoken *token, T_task_type type, T_dictionary *data){
 	random_task_id(t->id);
 	t->token = token;
 	t->type = type;
-	t->data = (char *)malloc(strlen(data));
-	strcpy(t->data,data);
+	t->data = data;
 	t->result = (char *)malloc(TASKRESULT_SIZE);
 	t->result_size = TASKRESULT_SIZE;
 }
 
 void task_destroy(T_task **t){
-	free((*t)->data);
+	printf("Entramos a eliminar el task\n");
+	if((*t)->data != NULL){
+		printf("Eliminamos el diccionario\n");
+		dictionary_destroy(&((*t)->data));
+		//free((*t)->data);
+	}
+	printf("liberamos el resultado\n");
 	free((*t)->result);
+	printf("liberamos el task\n");
 	free(*t);
 }
 
@@ -62,7 +70,10 @@ void task_get_sites(T_task *t, T_list_site *l){
 }
 
 void task_get_site(T_task *t, T_list_site *l){
-	json_site(&(t->result),&(t->result_size),list_site_find_id(l,atoi(t->data)));
+	char *id;
+	id = dictionary_get(t->data,"id");
+	printf("paso %s",id);
+	json_site(&(t->result),&(t->result_size),list_site_find_id(l,atoi(id)));
 }
 
 char *task_get_result(T_task *t){
@@ -87,61 +98,72 @@ char *tob_get_id(T_task *t){
 	return t->id;
 }
 
-void task_add_site(T_task *t, T_list_site *l){
+int task_add_site(T_task *t, T_list_site *l, T_db *db){
 	/* Agrega un sitio a la solucion */
 
 	T_site *newsite;
 	char sql[300];
-	char name[200];
-	char susc_id[300];
+	char *name;
+	char *susc_id;
 	char dir[6];
 	char command[300];
-	int pos=0;
+	unsigned int id;
 	
-	// Obtenemos la id de suscripcion
-	parce_data(t->data,'|',&pos,susc_id);
-	parce_data(t->data,'|',&pos,name);
-
-	// Creacion del espacio de almacenamiento
+	printf("wueremos agregar un sitio\n");
+	dictionary_print(t->data);
+	name = dictionary_get(t->data,"name");
+	susc_id = dictionary_get(t->data,"susc_id");
 	random_dir(dir);
-	printf("Creamos el directorio %s\n",dir);
-	sprintf(command,"mkdir -p /websites/%s/wwwroot");
-	printf("%s\n",command);
-	sprintf(command,"mkdir -p /websites/%s/logs");
-	printf("%s\n",command);
+
+	printf("DATOS: -%s- -%s- -%s-\n",name,susc_id,dir);
+
+	/* Los tres valores anteriores no pueden ser vacio */
+	if(strcmp(susc_id,"") == 0){ return 0; }
+	if(strcmp(name,"") == 0){ return 0; }
+	if(strcmp(dir,"") == 0){ return 0; }
+
+	/* Verificamos que el sitio no exista ya con ese nombre */
+	printf("Verificamos si el sitio existe\n");
+	if(db_find_site(db,name)){ printf("NOOO\n"); return 0; }
 
 	// Alta en la base de datos del sitio
-	sprintf(sql,"insert into site(version,name,size,susc_id,dir) values(1,\"%s\",1,\"%s\",\"%s\")",
-		name,susc_id,dir);
-	printf("Agregamos a la base de datos: %s\n",sql);
-	
-	// Creacion del sitio
-	/*
-	newsite = (T_site *)malloc(size(T_site));
-	site_init(newsite,name,id,userid,susc,version,size);
+	printf("Alta a la base de datos\n");
+	if(!db_add_site(db,&newsite,name,dir,atoi(susc_id))){ return 0; }
+
+	// Creacion del espacio de almacenamiento
+	printf("Creacion de directorios\n");
+	sprintf(command,"mkdir -p /websites/%s/%s/wwwroot",dir,name);
+	if(system(command) != 0){ return 0; }
+	sprintf(command,"mkdir -p /websites/%s/%s/logs",dir,name);
+	if(system(command) != 0){ return 0; }
+
+	// Adicion del sitio a la lista
+	printf("agregado al listado\n");
 	list_site_add(l,newsite);
-	*/
+
+	return 1;
 }
 
-void task_del_site(T_task *t, T_list_site *l){
+int task_del_site(T_task *t, T_list_site *l, T_db *db){
 }
 
-void task_mod_site(T_task *t, T_list_site *l){
+int task_mod_site(T_task *t, T_list_site *l, T_db *db){
 }
 
-void task_stop_worker(T_task *t, T_list_worker *l){
+int task_stop_worker(T_task *t, T_list_worker *l, T_db *db){
 }
 
-void task_start_worker(T_task *t, T_list_worker *l){
+int task_start_worker(T_task *t, T_list_worker *l, T_db *db){
 }
 
-void task_stop_site(T_task *t, T_list_site *l){
+int task_stop_site(T_task *t, T_list_site *l, T_db *db){
 }
 
-void task_start_site(T_task *t, T_list_site *l){
+int task_start_site(T_task *t, T_list_site *l, T_db *db){
 }
 
-void task_run(T_task *t, T_list_site *sites, T_list_worker *workers, T_list_proxy *proxys){
+void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
+		T_list_proxy *proxys, T_db *db){
 	/* Ejecuta el JOB */
 	t->status = T_RUNNING;
 
@@ -155,19 +177,19 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers, T_list_prox
 		case T_GET_WORKER:
 			task_get_worker(t,workers); break;
 		case T_ADD_SITE:
-			task_add_site(t,sites); break;
+			task_add_site(t,sites,db); break;
 		case T_DEL_SITE:
-			task_del_site(t,sites); break;
+			task_del_site(t,sites,db); break;
 		case T_MOD_SITE:
-			task_mod_site(t,sites); break;
+			task_mod_site(t,sites,db); break;
 		case T_STOP_WORKER:
-			task_stop_worker(t,workers); break;
+			task_stop_worker(t,workers,db); break;
 		case T_START_WORKER:
-			task_start_worker(t,workers); break;
+			task_start_worker(t,workers,db); break;
 		case T_STOP_SITE:
-			task_stop_site(t,sites); break;
+			task_stop_site(t,sites,db); break;
 		case T_START_SITE:
-			task_start_site(t,sites); break;
+			task_start_site(t,sites,db); break;
 	}
 	t->status = T_DONE;
 }
@@ -186,7 +208,6 @@ void heap_task_push(T_heap_task *h, T_task *t){
 	heap_t_node *new;
 	heap_t_node *aux;
 
-	printf("Entroooo\n");
 	new = (heap_t_node*)malloc(sizeof(heap_t_node));
 	new->next = NULL;
 	new->data = t;
