@@ -25,7 +25,9 @@ void *rest_server_do_task(void *param){
 			printf("DO_TASK - %s\n",task_get_id(task));
 		pthread_mutex_unlock(&(r->mutex_heap_task));
 		if(task != NULL){
-			task_run(task,r->sites,r->workers,r->proxys,r->db);
+			pthread_mutex_lock(&(r->mutex_lists));
+				task_run(task,r->sites,r->workers,r->proxys,r->db);
+			pthread_mutex_unlock(&(r->mutex_lists));
 			pthread_mutex_lock(&(r->mutex_bag_task));
 				printf("BAG_TASK - %s\n",task_get_id(task));
 				bag_task_add(&(r->tasks_done),task);
@@ -124,6 +126,8 @@ static int handle_POST(struct MHD_Connection *connection,
 			/* Es el alta de un sitio */
 			task_init(task,&token,T_ADD_SITE,con_info->data);
 		}
+	} else if(0 == strcmp("workers",value)){
+		/* Acciones POST sobre un worker. A IMPLEMENTAR */
 	} else {
 		/* ERROR de protocolo. URL mal confeccionada */
 		task_destroy(&task);
@@ -176,6 +180,7 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
 			/* Se solicita info de un worker */
+			data = malloc(sizeof(T_dictionary));
 			dictionary_init(data);
 			dictionary_add(data,"id",value);
 			task_init(task,&token,T_GET_WORKER,data);
@@ -314,4 +319,14 @@ void rest_server_init(T_rest_server *r, T_list_site *sites, T_list_worker *worke
 		printf ("Imposible levantar el hilo para realizar tareas\n");
 		exit(2);
 	}
+}
+
+void rest_server_lock(T_rest_server *r){
+        /* seccion critica manejo de listas */
+        pthread_mutex_lock(&(r->mutex_lists));
+}
+
+void rest_server_unlock(T_rest_server *r){
+        /* seccion critica manejo de listas */
+        pthread_mutex_unlock(&(r->mutex_lists));
 }

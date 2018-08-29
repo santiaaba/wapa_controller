@@ -22,6 +22,7 @@ typedef struct t_r_server {
 	pthread_t do_task;
 	pthread_mutex_t mutex_heap_task;
 	pthread_mutex_t mutex_bag_task;
+	pthread_mutex_t mutex_lists;
 	T_list_site *sites;
         T_list_worker *workers;
         T_list_proxy *proxys;
@@ -47,3 +48,7 @@ extern T_rest_server rest_server;
 void rest_server_init(T_rest_server *r, T_list_site *sites,
 			T_list_worker *workers, T_list_proxy *proxys, T_db *db);
 void rest_server_add_task(T_rest_server *r, T_task *j);
+
+void rest_server_lock(T_rest_server *r);
+
+void rest_server_unlock(T_rest_server *r);

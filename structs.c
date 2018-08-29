@@ -181,7 +181,7 @@ char *worker_get_name(T_worker *w){
 	return w->name;
 }
 
-char *worker_get_ip(T_worker *w){
+char *worker_get_ipv4(T_worker *w){
 	return w->ip;
 }
 
@@ -285,7 +285,8 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 	char buffer_tx[BUFFERSIZE];
 	T_alias *alias;
 
-	sprintf(buffer_tx,"A|%s|%lu|%s|",site_get_name(s),site_get_id(s),site_get_dir(s));
+	sprintf(buffer_tx,"A|%s|%lu|%s|%i|%s",site_get_name(s),site_get_id(s),site_get_dir(s),
+	site_get_version(s),default_domain);
 	
 	if(worker_send_recive(w,buffer_tx,buffer_rx)){
 		if(buffer_rx[0] == '1'){
@@ -425,60 +426,60 @@ void proxy_init(T_proxy *p, int id, char *name, char *ip, T_proxy_status s){
 }
 
 int proxy_connect(T_proxy *p){
-        /* Funcion de uso interno */
-        /* Intenta conectarse al proxy */
+	/* Funcion de uso interno */
+	/* Intenta conectarse al proxy */
 
-        close(p->socket);
-        p->socket = socket(AF_INET , SOCK_STREAM , 0);
-        if (connect(p->socket , (struct sockaddr *) &(p->server) , sizeof(p->server)) < 0){
-                printf("Proxy %s NO CONECTA\n",p->name);
-                return 0;
-        }
-        printf("Proxy %s CONECTO\n",p->name);
-        return 1;
+	close(p->socket);
+	p->socket = socket(AF_INET , SOCK_STREAM , 0);
+	if (connect(p->socket , (struct sockaddr *) &(p->server) , sizeof(p->server)) < 0){
+		printf("Proxy %s NO CONECTA\n",p->name);
+		return 0;
+	}
+	printf("Proxy %s CONECTO\n",p->name);
+	return 1;
 }
 
 unsigned int proxy_get_last_time(T_proxy *p){
-        return p->time_change_status;
+	return p->time_change_status;
 }
 
 void proxy_change_status(T_proxy *p, T_proxy_status s){
-        /* funcion de uso interno */
-        /* Retorna 1 si cambio el estado. 0 en caso contrario */
-        char aux[100];
-        char aux2[100];
+	/* funcion de uso interno */
+	/* Retorna 1 si cambio el estado. 0 en caso contrario */
+	char aux[100];
+	char aux2[100];
 
-        /* Solo actualizamos el estado si es distinto
-         * del que ya posee */
-        itowstatus(p->last_status,aux);
-        itowstatus(s,aux2);
-        if(p->status != s){
-                printf("change_status: %s -> %s\n",aux,aux2);
-                p->time_change_status = (unsigned long)time(0);
-                p->last_status = p->status;
-                p->status = s;
-                p->is_changed = 1;
-        }
+	/* Solo actualizamos el estado si es distinto
+	 * del que ya posee */
+	itowstatus(p->last_status,aux);
+	itowstatus(s,aux2);
+	if(p->status != s){
+		printf("change_status: %s -> %s\n",aux,aux2);
+		p->time_change_status = (unsigned long)time(0);
+		p->last_status = p->status;
+		p->status = s;
+		p->is_changed = 1;
+	}
 }
 
 T_proxy_status proxy_get_status(T_proxy *p){
-        return p->status;
+	return p->status;
 }
 
 T_proxy_status proxy_get_last_status(T_proxy *p){
-        return p->last_status;
+	return p->last_status;
 }
 
 int proxy_get_id(T_proxy *p){
-        return p->id;
+	return p->id;
 }
 
 void proxy_set_online(T_proxy *p){
-        proxy_change_status(p,P_PREPARED);
+	proxy_change_status(p,P_PREPARED);
 }
 
 void proxy_set_offline(T_proxy *p){
-        proxy_change_status(p,P_OFFLINE);
+	proxy_change_status(p,P_OFFLINE);
 }
 
 char *proxy_get_name(T_proxy *p){
@@ -489,22 +490,39 @@ char *proxy_get_ip(T_proxy *p){
 }
 
 float proxy_get_load(T_proxy *p){
-        return p->laverage;
+	return p->laverage;
 }
 
 void proxy_set_statistics(T_proxy *p, char *buffer_rx){
-        /* Funcion interna. Actualiza las estadisticas
-         * en base a lo que recibe del proxy fisico */
-        char aux[10];
-        int pos=2;
-        parce_data(buffer_rx,'|',&pos,aux); // Obtiene el mensaje
-        parce_data(buffer_rx,'|',&pos,aux); // average 1 min
-        parce_data(buffer_rx,'|',&pos,aux); // average 5 min
-        parce_data(buffer_rx,'|',&pos,aux); // average 15 min
-        p->laverage = atof(aux);
+	/* Funcion interna. Actualiza las estadisticas
+	 * en base a lo que recibe del proxy fisico */
+	char aux[10];
+	int pos=2;
+	parce_data(buffer_rx,'|',&pos,aux); // Obtiene el mensaje
+	parce_data(buffer_rx,'|',&pos,aux); // average 1 min
+	parce_data(buffer_rx,'|',&pos,aux); // average 5 min
+	parce_data(buffer_rx,'|',&pos,aux); // average 15 min
+	p->laverage = atof(aux);
 }
 
-int proxy_add_site(T_proxy *p, T_site *s, char *default_domain){
+void proxy_reconfig(T_proxy *p, T_list_site *sites){
+	/* Reconfigura un proxy en base a la informacion
+	   de los sitios. Borra toda configuracion anterior.
+	   De momento un proxy ve todos los sitios y no unos en particular */
+	char buffer_rx[BUFFERSIZE];
+
+	if(proxy_send_recive(p,"D",buffer_rx)){
+		list_site_first(sites);
+		while(!list_site_eol(sites)){
+			printf("Agregamos el sitio al proxy\n");
+			proxy_add_site(p,list_site_get(sites));
+			list_site_next(sites);
+			printf("Sitio siguiente\n");
+		}
+	}
+}
+
+int proxy_add_site(T_proxy *p, T_site *s){
 	/* Reconfigura el proxy para el sitio indicado */
 
 	char buffer_rx[BUFFERSIZE];
@@ -513,79 +531,88 @@ int proxy_add_site(T_proxy *p, T_site *s, char *default_domain){
 	T_worker *worker;
 	char aux[512];
 
-	/* instruccion a enviar A|<site_id>|<site_version>|<site name>|<default_domain> */
-	sprintf(buffer_tx,"A|%s|%s|%lu|%i",site_get_name(s),default_domain,
+	sprintf(buffer_tx,"A|%s|%lu|%i",site_get_name(s),
 		site_get_id(s),site_get_version(s));
 
-	if(proxy_send_recive(p,buffer_tx,buffer_rx)){
-		if(buffer_rx[0] == '1'){
-			printf("pasamos a enviar los workers\n");
-			/* Enviamos los workers. Puede que requieran varios envios */
-			list_worker_first(site_get_workers(s));
-			strcpy(buffer_tx,"0|");         //El 0 indica que no habria mas datos a enviar luego
-			while(!list_worker_eol(site_get_workers(s))){
-				worker = list_worker_get(site_get_workers(s));
-				printf("Adjuntando worker %s\n",worker_get_name(worker));
+	if(!proxy_send_recive(p,buffer_tx,buffer_rx))
+		return 0;
 
-				if(strlen(worker_get_name(worker)) +
-				   strlen(buffer_tx) + 2 > BUFFERSIZE){
-					// Buffer lleno. Enviamos lo que tenemos
-					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
-					buffer_tx[0] = '1';
-					if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-						//Falla del proxy al recibir los datos
-						return 0;
-					}
-					strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
-				}
-				//seguimos publando el buffer
-				strcat(buffer_tx,worker_get_name(worker));
-				strcat(buffer_tx,"|");
-				list_worker_next(site_get_workers(s));
-			}
-			// Enviamos los workers remanentes. Puede que este vacio
-			printf("Enviando remanente:%s\n",buffer_tx);
+	if(buffer_rx[0] != '1')
+		return 0;
+
+	printf("pasamos a enviar los workers\n");
+	/* Enviamos los workers. Puede que requieran varios envios */
+	list_worker_first(site_get_workers(s));
+	strcpy(buffer_tx,"0|");	 //El 0 indica que no habria mas datos a enviar luego
+	while(!list_worker_eol(site_get_workers(s))){
+		worker = list_worker_get(site_get_workers(s));
+		printf("Adjuntando worker %s\n",worker_get_name(worker));
+
+		if(strlen(worker_get_name(worker)) +
+		   strlen(buffer_tx) + 2 > BUFFERSIZE){
+			// Buffer lleno. Enviamos lo que tenemos
+			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
+			buffer_tx[0] = '1';
 			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
 				//Falla del proxy al recibir los datos
 				return 0;
 			}
-
-			printf("COmenzamos con los alias!!!\n");
-			/* Enviamos los alias. Puede que requieran varios envios */
-			list_alias_first(site_get_alias(s));
-			strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar luego
-			while(!list_alias_eol(site_get_alias(s))){
-				alias = list_alias_get(site_get_alias(s));
-				if(strlen(alias_get_name(alias)) +
-				   strlen(buffer_tx) + 2 > BUFFERSIZE){
-					// Buffer lleno. Enviamos lo que tenemos
-					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
-					buffer_tx[0] = '1';
-					if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-						//Falla del proxy al recibir los datos
-						return 0;
-					}
-					strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
-				}
-				//seguimos publando el buffer
-				strcat(buffer_tx,alias_get_name(alias));
-				strcat(buffer_tx,"|");
-				list_alias_next(site_get_alias(s));
-			}
-			// Enviamos los alias remanentes. Puede que este vacio
-			printf("Enviando remanente:%s\n",buffer_tx);
-			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-				//Falla del proxy al recibir los datos
-				return 0;
-			}
-			return 1;
-		} else {
-			return 0;
+			strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
 		}
-	} else {
-		// Problemas para contactar al proxy
+		//seguimos publando el buffer
+		strcat(buffer_tx,worker_get_name(worker));
+		strcat(buffer_tx,"|");
+		list_worker_next(site_get_workers(s));
+	}
+	// Enviamos los workers remanentes. Puede que este vacio
+	printf("Enviando remanente:%s\n",buffer_tx);
+	if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+		//Falla del proxy al recibir los datos
 		return 0;
 	}
+
+	printf("COmenzamos con los alias!!!\n");
+	/* Enviamos los alias. Puede que requieran varios envios */
+	list_alias_first(site_get_alias(s));
+	strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar luego
+	while(!list_alias_eol(site_get_alias(s))){
+		alias = list_alias_get(site_get_alias(s));
+		if(strlen(alias_get_name(alias)) +
+		   strlen(buffer_tx) + 2 > BUFFERSIZE){
+			// Buffer lleno. Enviamos lo que tenemos
+			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
+			buffer_tx[0] = '1';
+			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+				//Falla del proxy al recibir los datos
+				return 0;
+			}
+			strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
+		}
+		//seguimos publando el buffer
+		strcat(buffer_tx,alias_get_name(alias));
+		strcat(buffer_tx,"|");
+		list_alias_next(site_get_alias(s));
+	}
+	// Enviamos los alias remanentes. Puede que este vacio
+	printf("Enviando remanente:%s\n",buffer_tx);
+	if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
+		//Falla del proxy al recibir los datos
+		return 0;
+	}
+	return 1;
+}
+
+int proxy_change_site(T_proxy *p, T_site *s){
+
+	char buffer_rx[BUFFERSIZE];
+	char buffer_tx[BUFFERSIZE];
+
+	/* Eliminamos la configuracion anterior */
+	sprintf(buffer_tx,"d|%s",site_get_name(s));
+	if(!proxy_send_recive(p,buffer_tx,buffer_rx))
+		return 0;
+
+	return proxy_add_site(p,s);
 }
 
 int proxy_reload(T_proxy *p){
@@ -596,76 +623,76 @@ int proxy_reload(T_proxy *p){
 }
 
 int proxy_check(T_proxy *p){
-        /* Verifica un proxy. Actualiza el estado del mismo */
-        /* Retorna 1 si cambio de estado. 0 En caso contrario */
+	/* Verifica un proxy. Actualiza el estado del mismo */
+	/* Retorna 1 si cambio de estado. 0 En caso contrario */
 
-        char buffer_rx[BUFFERSIZE];
+	char buffer_rx[BUFFERSIZE];
 
-        /* Verificamos si responde correctamente */
-        /* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
+	/* Verificamos si responde correctamente */
+	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
 
-        printf("Tiempo entre estados %lu - %lu = %lu\n",(unsigned long)time(0),
-                (unsigned long)p->time_change_status,
-                (unsigned long)time(0) - (unsigned long)p->time_change_status);
-        if(p->status != P_OFFLINE){
-                if(proxy_send_recive(p,"C",buffer_rx)){
-                        printf("CHECK: -%s-\n",buffer_rx);
-                        /* Actualizamos las estadisticas */
-                        proxy_set_statistics(p, buffer_rx);
-                        if(buffer_rx[0] == '1'){
-                                if(p->status == P_BROKEN || p->status == P_UNKNOWN){
-                                        /* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
-                                        proxy_change_status(p,P_PREPARED);
-                                } else {
-                                        if((p->status == P_PREPARED) &&
-                                           ((unsigned long)time(0) - p->time_change_status) > TIMEONLINE){
-                                                 /* Responde, pasa el chequeo,
-                                                  * ya estaba en PREPARED y paso el tiempo */
-                                                 proxy_change_status(p,P_ONLINE);
-                                        }
-                                }
-                        } else {
-                                printf("proxy %s ROTO!\n",proxy_get_name(p));
-                                proxy_change_status(p,P_BROKEN);
-                        }
-                } else {
-                        printf("proxy %s NO RESPONDE!\n",proxy_get_name(p));
-                }
-        }
-        if (p->is_changed){
-                p->is_changed = 0;
-                return 1;
-        } else {
-                return 0;
-        }
+	printf("Tiempo entre estados %lu - %lu = %lu\n",(unsigned long)time(0),
+		(unsigned long)p->time_change_status,
+		(unsigned long)time(0) - (unsigned long)p->time_change_status);
+	if(p->status != P_OFFLINE){
+		if(proxy_send_recive(p,"C",buffer_rx)){
+			printf("CHECK: -%s-\n",buffer_rx);
+			/* Actualizamos las estadisticas */
+			proxy_set_statistics(p, buffer_rx);
+			if(buffer_rx[0] == '1'){
+				if(p->status == P_BROKEN || p->status == P_UNKNOWN){
+					/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
+					proxy_change_status(p,P_PREPARED);
+				} else {
+					if((p->status == P_PREPARED) &&
+					   ((unsigned long)time(0) - p->time_change_status) > TIMEONLINE){
+						 /* Responde, pasa el chequeo,
+						  * ya estaba en PREPARED y paso el tiempo */
+						 proxy_change_status(p,P_ONLINE);
+					}
+				}
+			} else {
+				printf("proxy %s ROTO!\n",proxy_get_name(p));
+				proxy_change_status(p,P_BROKEN);
+			}
+		} else {
+			printf("proxy %s NO RESPONDE!\n",proxy_get_name(p));
+		}
+	}
+	if (p->is_changed){
+		p->is_changed = 0;
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 int proxy_send_recive(T_proxy *p, char *command, char *buffer_rx){
-        /* Se conecta al proxy, envia un comando y espera la respuesta */
+	/* Se conecta al proxy, envia un comando y espera la respuesta */
 
-        int cant_bytes;
+	int cant_bytes;
 
-        cant_bytes = send(p->socket,command, BUFFERSIZE,0);
-        printf("%s: send_recive %p - enviando(%i): %s\n",p->name,&(p->socket),cant_bytes,command);
-        if(cant_bytes <0){
-                printf("Send_recive: FALLO SEND!!!!\n");
-                /* Fallo la conectividad contra el proxy */
-                proxy_change_status(p,P_UNKNOWN);
-                /* Reintentamos conectar */
-                proxy_connect(p);
-                return 0;
-        }
-        cant_bytes = recv(p->socket,buffer_rx,BUFFERSIZE,0);
-        if(cant_bytes<0){
-                printf("Send_recive: FALLO RECV!!!!\n");
-                /* Fallo la conectividad contr el proxy */
-                proxy_change_status(p,P_UNKNOWN);
-                /* Reintentamos conectar */
-                proxy_connect(p);
-                return 0;
-        }
-        printf("send_recive - recibido(%i): %s\n",cant_bytes,buffer_rx);
-        return 1;
+	cant_bytes = send(p->socket,command, BUFFERSIZE,0);
+	printf("%s: send_recive %p - enviando(%i): %s\n",p->name,&(p->socket),cant_bytes,command);
+	if(cant_bytes <0){
+		printf("Send_recive: FALLO SEND!!!!\n");
+		/* Fallo la conectividad contra el proxy */
+		proxy_change_status(p,P_UNKNOWN);
+		/* Reintentamos conectar */
+		proxy_connect(p);
+		return 0;
+	}
+	cant_bytes = recv(p->socket,buffer_rx,BUFFERSIZE,0);
+	if(cant_bytes<0){
+		printf("Send_recive: FALLO RECV!!!!\n");
+		/* Fallo la conectividad contr el proxy */
+		proxy_change_status(p,P_UNKNOWN);
+		/* Reintentamos conectar */
+		proxy_connect(p);
+		return 0;
+	}
+	printf("send_recive - recibido(%i): %s\n",cant_bytes,buffer_rx);
+	return 1;
 }
 
 /*****************************
@@ -749,8 +776,10 @@ T_worker *list_worker_remove_id(T_list_worker *l, int w_id){
 }
 
 T_worker *list_worker_remove(T_list_worker *l){
-	/* Elimina del alista el elemento apuntado por el punero actual.
- 	 * El puntero actual pasa al nodo siguiente */
+	/* Elimina de la lista el nodo que contiene el elemento
+ 	 * apuntado por el punero actual. El objeto dentro del nodo
+ 	 * no se elimina.
+ 	 * El puntero actual pasa al nodo siguiente. */
 
 	list_w_node *prio;
 	list_w_node *aux;
@@ -840,10 +869,13 @@ void list_worker_sort_by_site(T_list_worker *l,int des){
 
 	T_worker *worker1, *worker2;
 	int i,j;
-
-	for(i=0;i<l->size - 1;i++){
-		list_worker_first(l);
-		for(j=1;j<l->size - i;j++){
+	//ERROOOOR
+	//printf("SORT: size=%i\n",l->size);
+	for(i=1;i<l->size;i++){
+		//printf("SORT: Entro primer for size= %i i=%i\n",l->size,i);
+		l->actual = l->first;
+		for(j=1;j<=(l->size - i);j++){
+			//printf("SORT: Entro segundo for size=%i j=%i\n",l->size,j);
 			worker1 = l->actual->data;
 			worker2 = l->actual->next->data;
 			if(des){
@@ -863,6 +895,28 @@ void list_worker_sort_by_site(T_list_worker *l,int des){
 		}
 	}
 }
+
+void list_worker_print(T_list_worker *l){
+	l->actual = l->first;
+	printf("PRINT WORKER\n");
+	while(l->actual != NULL){
+		printf("Print Worker: %s\n",worker_get_name(l->actual->data));
+		l->actual = l->actual->next;
+	}
+	printf("--------------\n");
+}
+
+/*
+void list_worker_lock(T_list_worker *l){
+	printf("LOCK workers\n");
+	pthread_mutex_lock(&(l->lock));
+}
+
+void list_worker_unlock(T_list_worker *l){
+	printf("UN_LOCK workers\n");
+	pthread_mutex_unlock(&(l->lock));
+}
+*/
 
 /*****************************
 	 Lista de Sitios
@@ -978,6 +1032,26 @@ T_site *list_site_remove(T_list_site *l){
 	return element;
 }
 
+T_site *list_site_remove_id(T_list_site *l, unsigned int id){
+	/* remueve de la lista el elemento apuntado por el punero actual.
+ 	 * El puntero actual pasa al nodo siguiente */
+	/* EL ELEMENTO SE RETORNA. SOLO SE LO REMUEVE DE LA LISTA */
+
+	int exist = 0;
+	list_s_node *aux;
+
+	l->actual = l->first;
+	while(!exist && l->actual != NULL){
+		if(site_get_id(l->actual->data) == id){
+			printf("list_site_remove_id: Encontramos el site a eliminar\n");
+			return list_site_remove(l);
+		}
+		l->actual = l->actual->next;
+	}
+	return NULL;
+}
+
+
 void list_site_erase(T_list_site *l){
 	/* Vacia la lista sin eliminar los elementos. */
 	list_site_first(l);
@@ -985,6 +1059,17 @@ void list_site_erase(T_list_site *l){
 		list_site_remove(l);
 	}
 }
+/*
+void list_site_lock(T_list_site *l){
+	printf("LOCK sites\n");
+	pthread_mutex_lock(&(l->lock));
+}
+
+void list_site_unlock(T_list_site *l){
+	printf("UN_LOCK sites\n");
+	pthread_mutex_unlock(&(l->lock));
+}
+*/
 
 /*****************************
 	 Lista de Proxys
@@ -1083,6 +1168,18 @@ void list_proxy_erase(T_list_proxy *l){
 	}
 }
 
+/*
+void list_proxy_lock(T_list_proxy *l){
+	printf("LOCK proxys\n");
+	pthread_mutex_lock(&(l->lock));
+}
+
+void list_proxy_unlock(T_list_proxy *l){
+	printf("UN_LOCK proxys\n");
+	pthread_mutex_unlock(&(l->lock));
+}
+*/
+
 /*****************************
 *	 Lista de alias
 ******************************/
@@ -1159,3 +1256,15 @@ T_alias *list_alias_remove(T_list_alias *l){
 	}
 	return element;
 }
+
+/*
+void list_alias_lock(T_list_alias *l){
+	printf("LOCK Alias\n");
+	pthread_mutex_lock(&(l->lock));
+}
+
+void list_alias_unlock(T_list_alias *l){
+	printf("UNLOCK Alias\n");
+	pthread_mutex_unlock(&(l->lock));
+}
+*/

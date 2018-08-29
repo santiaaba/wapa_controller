@@ -72,7 +72,6 @@ void task_get_sites(T_task *t, T_list_site *l){
 void task_get_site(T_task *t, T_list_site *l){
 	char *id;
 	id = dictionary_get(t->data,"id");
-	printf("paso %s",id);
 	json_site(&(t->result),&(t->result_size),list_site_find_id(l,atoi(id)));
 }
 
@@ -85,9 +84,13 @@ char *task_get_id(T_task *t){
 }
 
 void task_get_workers(T_task *t, T_list_worker *l){
+	json_workers(&(t->result),&(t->result_size),l);
 }
 
 void task_get_worker(T_task *t, T_list_worker *l){
+	char *id;
+	id = dictionary_get(t->data,"id");
+	json_worker(&(t->result),&(t->result_size),list_worker_find_id(l,atoi(id)));
 }
 
 T_tasktoken *tob_get_token(T_task *t){
@@ -165,7 +168,9 @@ int task_start_site(T_task *t, T_list_site *l, T_db *db){
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		T_list_proxy *proxys, T_db *db){
 	/* Ejecuta el JOB */
+	printf("paso\n");
 	t->status = T_RUNNING;
+	printf("paso\n");
 
 	switch(t->type){
 		case T_GET_SITES:

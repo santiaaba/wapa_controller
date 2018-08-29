@@ -95,7 +95,7 @@ T_worker_status worker_get_status(T_worker *w);
 T_worker_status worker_get_last_status(T_worker *w);
 unsigned int worker_get_last_time(T_worker *w);
 int worker_check(T_worker *w);
-char *worker_get_ip(T_worker *w);
+char *worker_get_ipv4(T_worker *w);
 float worker_get_load(T_worker *w);
 void worker_set_online(T_worker *w);
 void worker_set_offline(T_worker *w);
@@ -138,11 +138,14 @@ T_proxy_status proxy_get_status(T_proxy *p);
 T_proxy_status proxy_get_last_status(T_proxy *p);
 unsigned int proxy_get_last_time(T_proxy *p);
 int proxy_check(T_proxy *p);
+int proxy_add_site(T_proxy *p, T_site *s);
+int proxy_change_site(T_proxy *p, T_site *s);
 char *proxy_get_ip(T_proxy *p);
 float proxy_get_load(T_proxy *p);
 void proxy_set_online(T_proxy *p);
 void proxy_set_offline(T_proxy *p);
 int proxy_reload(T_proxy *p);
+void proxy_reconfig(T_proxy *p, T_list_site *sites);
 
 /*****************************
  	Lista de Workers
@@ -157,6 +160,7 @@ struct list_worker{
 	list_w_node *first;
 	list_w_node *last;
 	list_w_node *actual;
+	pthread_mutex_t lock;
 };
 
 /* Inicializa la estructura de lista */
@@ -198,6 +202,14 @@ void list_worker_sort_by_site(T_list_worker *l,int des);
  * El segundo parametro es 1 desscendente, 0 ascendente */
 void list_worker_sort_by_load(T_list_worker *l,int des);
 
+/*Bloquea la lista para acceso concurrente */
+void list_worker_lock(T_list_worker *l);
+
+/*Desbloque la lista para acceso concurrente */
+void list_worker_unlock(T_list_worker *l);
+
+void list_worker_print(T_list_worker *l);
+
 /*****************************
  	Lista de Sitios
 ******************************/
@@ -211,6 +223,7 @@ struct list_site {
 	list_s_node *first;
 	list_s_node *last;
 	list_s_node *actual;
+	pthread_mutex_t lock;
 };
 
 /* Inicializa la estructura de lista */
@@ -238,11 +251,19 @@ int list_site_eol(T_list_site *l);
  * El puntero queda apuntado al elemento siguente */
 T_site *list_site_remove(T_list_site *l);
 
+T_site *list_site_remove_id(T_list_site *l, unsigned int id);
+
 /* retorna el elemento solicitado por su id. NULL si no existe*/
 T_site *list_site_find_id(T_list_site *l, unsigned int site_id);
 
 /* Vacia la lista sin eliminar los elementos. */
 void list_site_erase(T_list_site *l);
+
+/*Bloquea la lista para acceso concurrente */
+void list_site_lock(T_list_site *l);
+
+/*Desbloque la lista para acceso concurrente */
+void list_site_unlock(T_list_site *l);
 
 /*****************************
  	Lista de Proxys
@@ -257,6 +278,7 @@ struct list_proxy {
 	list_p_node *first;
 	list_p_node *last;
 	list_p_node *actual;
+	pthread_mutex_t lock;
 };
 
 void list_proxy_init(T_list_proxy *l);
@@ -268,6 +290,8 @@ unsigned int list_proxy_size(T_list_proxy *l);
 int list_proxy_eol(T_list_proxy *l);
 void list_proxy_remove(T_list_proxy *l);
 void list_proxy_destroy(T_list_proxy *l);
+void list_proxy_lock(T_list_proxy *l);
+void list_proxy_unlock(T_list_proxy *l);
 
 /*****************************
  *         Lista de alias
@@ -282,6 +306,7 @@ struct list_alias {
         list_a_node *first;
         list_a_node *last;
         list_a_node *actual;
+	pthread_mutex_t lock;
 };
 
 void list_alias_init(T_list_alias *l);
@@ -292,5 +317,7 @@ T_alias *list_alias_get(T_list_alias *l);
 unsigned int list_alias_size(T_list_alias *l);
 int list_alias_eol(T_list_alias *l);
 T_alias *list_alias_remove(T_list_alias *l);
+void list_alias_lock(T_list_alias *l);
+void list_alias_unlock(T_list_alias *l);
 
 #endif
