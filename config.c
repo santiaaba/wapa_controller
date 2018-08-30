@@ -43,6 +43,8 @@ int config_load(const char *filename, T_config *conf){
 		if(0 == strcmp(&atr[0],"db_user")){strcpy(conf->db_user,&val[0]);}
 		if(0 == strcmp(&atr[0],"db_pass")){strcpy(conf->db_pass,&val[0]);}
 		if(0 == strcmp(&atr[0],"default_domain")){strcpy(conf->default_domain,&val[0]);}
+		if(0 == strcmp(&atr[0],"load_average")){conf->load_average = atoi(&val[0]);}
+		if(0 == strcmp(&atr[0],"sites_average")){conf->sites_average = atoi(&val[0]);}
 	}
 	fclose(fp);
 }
@@ -61,4 +63,10 @@ char *config_db_pass(T_config *conf){
 }
 char *config_default_domain(T_config *conf){
 	return conf->default_domain;
+}
+int config_load_average(T_config *conf){
+	return conf->load_average;
+}
+int config_sites_average(T_config *conf){
+	return conf->sites_average;
 }

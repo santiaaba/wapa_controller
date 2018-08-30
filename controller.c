@@ -40,9 +40,99 @@ int init_sync(T_list_worker *workers, T_list_site *sites){
 	return 1;
 }
 
-int balance_workers(T_list_worker *workers){
-	/* A implementar */
-	return 1;
+int balance_workers(T_list_worker *workers, T_config *config){
+
+	/* Se basa en que todos los workers son compartidos.
+ 	 * Determina que worker esta sobre cargado e intenta
+ 	 * mover sitios de el a uno con menor carga y que ya no
+ 	 * contegan a dicho sitio.*/
+
+	 /* Retorna 1 si ha habido cambios. Caso contrario 0 */
+	
+	T_worker *wfirst = NULL;
+	T_worker *wlast = NULL;
+	T_site *site;
+	int encontro=0;
+
+	printf("---- BALANCE -----\n");
+
+	list_worker_sort_by_site(workers,1);
+	//list_worker_sort_by_load(workers,1);
+	
+	list_worker_first(workers);
+	while(!list_worker_eol(workers)){
+		if(worker_get_status(list_worker_get(workers)) == W_ONLINE)
+			wlast = list_worker_get(workers);
+		list_worker_next(workers);
+	}
+	/*Buscamos mas cargado activo */
+	list_worker_first(workers);
+	while((wfirst == NULL) && !list_worker_eol(workers)){
+		if(worker_get_status(list_worker_get(workers)) == W_ONLINE)
+			wfirst = list_worker_get(workers);
+		list_worker_next(workers);
+	}
+
+	if((wfirst != wlast) && (wfirst!=NULL)){
+		printf("wfirst: %i - wlast: %i\n",list_site_size(worker_get_sites(wfirst)),list_site_size(worker_get_sites(wlast)));
+		//if(worker_get_load(wfirst) > worker_get_load(wlast) * (1+config_load_average(config)/100)){
+		if((list_site_size(worker_get_sites(wfirst))) > (list_site_size(worker_get_sites(wlast))+1)){
+			/* Desbalaceo de carga. Buscamos el sotio a mover */
+			list_site_first(worker_get_sites(wfirst));
+			while(!encontro && !list_site_eol(worker_get_sites(wfirst))){
+				site = list_site_get(worker_get_sites(wfirst));
+				/* Verificamos que el sitio no este ya en el worker
+				 * de destino */
+				if(!list_worker_find_id(site_get_workers(site),worker_get_id(wlast))){
+					/* El sitio no se encuentra en el worker de destino
+ 					   lo movemos */
+					worker_remove_site(wfirst,site);
+					worker_add_site(wlast, site,config_default_domain(config));
+					encontro=1;
+				}
+			}
+		}
+		printf("---- FIN BALANCE -----\n");
+		return encontro;
+	} else 
+		return 0;
+}
+
+void migrate_sites(T_worker *worker, T_list_worker *aux_worker_list,
+		   T_list_proxy *proxys, T_config *config){
+	/* Migra los sitios de un worker a otros */
+
+	T_site *site;
+	T_list_worker candidates;
+
+	printf("------ MIGRATE START -----\n");
+	list_worker_init(&candidates);
+	list_site_first(worker_get_sites(worker));
+	while(!list_site_eol(worker_get_sites(worker))){
+		list_worker_erase(&candidates);
+		site = list_site_get(worker_get_sites(worker));
+		printf("migramos sitio %s - %i\n",site_get_name(site),list_worker_size(aux_worker_list));
+		REVISANDO PORQUE NO MIGRA
+		select_workers(aux_worker_list,&candidates,site);
+		assign_workers(&candidates,proxys,site,config);
+		list_site_next(worker_get_sites(worker));
+	}
+	list_worker_erase(&candidates);
+	printf("------ MIGRATE END -----\n");
+}
+
+int reload_services(T_list_worker *workers, T_list_proxy *proxys){
+
+	list_worker_first(workers);
+	while(!list_worker_eol(workers)){
+		worker_reload(list_worker_get(workers));
+		list_worker_next(workers);
+	}
+	list_proxy_first(proxys);
+	while(!list_proxy_eol(proxys)){
+		proxy_reload(list_proxy_get(proxys));
+		list_proxy_next(proxys);
+	}
 }
 
 int check_proxys(T_list_proxy *proxys, T_list_site *sites){
@@ -70,11 +160,12 @@ int check_proxys(T_list_proxy *proxys, T_list_site *sites){
 	}
 }
 
-int check_workers(T_list_worker *workers){
+int check_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *config){
 	/* Verifica el estado de un worker y en base al mismo toma acciones. */
 	
 	printf("\n--INI: Proceso check_workers\n");
 	T_worker *worker;
+	T_list_worker aux_worker_list;
 	char status[20];
 	char last_status[20];
 
@@ -89,6 +180,13 @@ int check_workers(T_list_worker *workers){
 			itowstatus(worker_get_status(worker),status);
 			itowstatus(worker_get_last_status(worker),last_status);
 			printf("\tlast_status %s -> status %s\n",last_status,status);
+			if((worker_get_status(worker) == W_OFFLINE)){
+				/* Worker pasa a OFFLINE. Despoblamos de sitios */
+				list_worker_init(&aux_worker_list);
+				list_worker_copy(workers,&aux_worker_list);
+				migrate_sites(worker,&aux_worker_list,proxys,config);
+				list_worker_erase(&aux_worker_list);
+			}
 			if((worker_get_status(worker) == W_PREPARED)){
 				/* Worker se recupera de una falla */
 				worker_purge(worker);
@@ -98,7 +196,7 @@ int check_workers(T_list_worker *workers){
 				printf("\tWorker %s paso de PREPARED a ONLINE.\n",
 					worker_get_name(worker));
 				/* Debemos balancear posiblemente */
-				balance_workers(workers);
+				//balance_workers(workers);
 			}
 			if((worker_get_status(worker) == W_BROKEN ||
 			   worker_get_status(worker) == W_UNKNOWN) &&
@@ -128,12 +226,11 @@ int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *si
 	char aux[50];
 	int cant=0;
 
+	printf("Seleccionamos los workers\n");
 	/* PAra pruebas utilizamos ort antidad de sitios */
-	printf("SORT %p\n",workers);
 	list_worker_sort_by_site(workers,0);
 	//list_worker_sort_by_load(workers,0);
 	list_worker_first(workers);
-	printf("PASO SORT\n");
 	while((site_get_real_size(site) + cant) < site_get_size(site)
 	     && !list_worker_eol(workers)){
 		worker = list_worker_get(workers);
@@ -206,12 +303,15 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers,
 	/* Recorre la lista de sitios buscando sitios donde la
 	 * cantidad de workers asignados no sea la adecuada */
 
+	/* Retorna 1 si al menos se a producido un cambio */
+
 	T_site *site;
 	T_list_worker candidates;
 	int siterealsize;
 	int changed = 0;
 
 	printf("\n----- NORMALICE ----\n");
+	list_site_print(sites);
 	list_site_first(sites);
 	list_worker_init(&candidates);
 	while(!list_site_eol(sites)){
@@ -223,43 +323,30 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers,
 			list_worker_erase(&candidates);
 			if(select_workers(workers,&candidates,site)){
 				printf("\tAsignamos los workers\n");
-				changed = assign_workers(&candidates,proxys,site,config);
+				changed |= assign_workers(&candidates,proxys,site,config);
 			}
 		} else {
 			if(siterealsize > site_get_size(site)){
 				/* Estan sobrando workers */
 				printf("\tEstan sobrando workers\n");
-				changed = des_assign_workers(site,workers);
+				changed |= des_assign_workers(site,workers);
 			}
 		}
 		list_site_next(sites);
 	}
-	/* Si ha habido cambios... realizamos un reload de todos los workers.
- 	   Podríamos mejorarlo y solo hacer un reload de los workers que cambiaron.
-	   Pero siempre luego de haber salido del while anterior para no repetir esta
-	   operacion*/
-	if(changed){
-		list_worker_first(workers);
-		while(!list_worker_eol(workers)){
-			worker_reload(list_worker_get(workers));
-			list_worker_next(workers);
-		}
-	
-		/* Los proxys tambien deben reiniciarse */
-		list_proxy_first(proxys);
-		while(!list_proxy_eol(proxys)){
-			proxy_reload(list_proxy_get(proxys));
-			list_proxy_next(proxys);
-		}
-	}
+	list_worker_erase(&candidates);
 	printf("\n----- FIN NORMALICE ----\n");
-	return 1;
+	return changed;
 }
 
 /********************************
  * 		MAIN		*
  ********************************/
 void main(){
+
+	int changed;
+
+	srand(time(NULL));
 
 	/* Cargamos la configuracion */
 	config_load("controller.conf",&config);
@@ -268,6 +355,8 @@ void main(){
 	printf("db_user : %s\n",config_db_user(&config));
 	printf("db_pass : %s\n",config_db_pass(&config));
 	printf("db_name : %s\n",config_db_name(&config));
+	printf("load_average : %i\n",config_load_average(&config));
+	printf("site_average : %i\n",config_sites_average(&config));
 
 	/* Iniciamos estructuras */
 	list_worker_init(&workers);
@@ -303,21 +392,26 @@ void main(){
 
 	/* Comenzamos el loop del controller */
 	while(1){
+		changed = 0;
 		rest_server_lock(&rest_server);
 
 		/* Chequeo de workers */
-		check_workers(&workers);
+		check_workers(&workers,&proxys,&config);
 		/* Chequeo de proxys */
 		check_proxys(&proxys,&sites);
 		
 		/* Asignacion sitios a worker */
-		normalice_sites(&sites, &workers, &proxys, &config);
-		rest_server_unlock(&rest_server);
+		changed |= normalice_sites(&sites, &workers, &proxys, &config);
 
 		/* Balanceamos workers */
-		//balance_workers(workers);
-		printf("Fin del bucle");
+		changed |= balance_workers(&workers,&config);
+		rest_server_unlock(&rest_server);
+
+		if(changed)
+			reload_services(&workers,&proxys);
+
 		sleep(5);
+		printf("Fin del bucle");
 	}
 
 	/* Finalizamos el hilo del rest_server */

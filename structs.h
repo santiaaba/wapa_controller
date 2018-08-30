@@ -97,14 +97,16 @@ unsigned int worker_get_last_time(T_worker *w);
 int worker_check(T_worker *w);
 char *worker_get_ipv4(T_worker *w);
 float worker_get_load(T_worker *w);
-void worker_set_online(T_worker *w);
-void worker_set_offline(T_worker *w);
+void worker_start(T_worker *w);
+void worker_stop(T_worker *w);
 int worker_reload(T_worker *w);
 T_list_site *worker_get_sites(T_worker *w);
 
 /* Agrega un sitio al worker. Esto implica agregarlo tambien
  * al worker fisico */
 int worker_add_site(T_worker *w, T_site *s,char *default_domain);
+
+int worker_remove_site(T_worker *w, T_site *s);
 
 /* Elimina logicamente los sitios de un worker.*/
 void worker_purge(T_worker *w);
@@ -169,8 +171,17 @@ void list_worker_init(T_list_worker *l);
 /* Agrega un elemento al final de la lista */
 void list_worker_add(T_list_worker *l, T_worker *w);
 
+/* Copia un alista en otra de workers */
+void list_worker_copy(T_list_worker *l, T_list_worker *l2);
+
 /* Retorna el elemento actualmente apuntado en la lista */
 T_worker *list_worker_get(T_list_worker *l);
+
+/* Retorna el primer elemento de la lista */
+T_worker *list_worker_get_first(T_list_worker *l);
+
+/* Retorna el ultimo elemento de la lista */
+T_worker *list_worker_get_last(T_list_worker *l);
 
 /* Coloca el punto al inicio de la lista*/
 void list_worker_first(T_list_worker *l);
@@ -201,12 +212,6 @@ void list_worker_sort_by_site(T_list_worker *l,int des);
 /* Ordena la lista de workers por el load average reportado
  * El segundo parametro es 1 desscendente, 0 ascendente */
 void list_worker_sort_by_load(T_list_worker *l,int des);
-
-/*Bloquea la lista para acceso concurrente */
-void list_worker_lock(T_list_worker *l);
-
-/*Desbloque la lista para acceso concurrente */
-void list_worker_unlock(T_list_worker *l);
 
 void list_worker_print(T_list_worker *l);
 
@@ -259,11 +264,7 @@ T_site *list_site_find_id(T_list_site *l, unsigned int site_id);
 /* Vacia la lista sin eliminar los elementos. */
 void list_site_erase(T_list_site *l);
 
-/*Bloquea la lista para acceso concurrente */
-void list_site_lock(T_list_site *l);
-
-/*Desbloque la lista para acceso concurrente */
-void list_site_unlock(T_list_site *l);
+void list_site_print(T_list_site *l);
 
 /*****************************
  	Lista de Proxys
@@ -290,8 +291,6 @@ unsigned int list_proxy_size(T_list_proxy *l);
 int list_proxy_eol(T_list_proxy *l);
 void list_proxy_remove(T_list_proxy *l);
 void list_proxy_destroy(T_list_proxy *l);
-void list_proxy_lock(T_list_proxy *l);
-void list_proxy_unlock(T_list_proxy *l);
 
 /*****************************
  *         Lista de alias
@@ -317,7 +316,5 @@ T_alias *list_alias_get(T_list_alias *l);
 unsigned int list_alias_size(T_list_alias *l);
 int list_alias_eol(T_list_alias *l);
 T_alias *list_alias_remove(T_list_alias *l);
-void list_alias_lock(T_list_alias *l);
-void list_alias_unlock(T_list_alias *l);
 
 #endif

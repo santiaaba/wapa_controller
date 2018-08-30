@@ -169,11 +169,11 @@ void worker_update_state(T_worker *w){
 	w->status;
 }
 
-void worker_set_online(T_worker *w){
+void worker_start(T_worker *w){
 	worker_change_status(w,W_PREPARED);
 }
 
-void worker_set_offline(T_worker *w){
+void worker_stop(T_worker *w){
 	worker_change_status(w,W_OFFLINE);
 }
 
@@ -328,6 +328,19 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 		// Problemas para contactar al worker
 		return 0;
 	}
+}
+
+int worker_remove_site(T_worker *w, T_site *s){
+	/* Remueve fisica y logicamente un sitio de un worker */
+	char buffer_rx[BUFFERSIZE];
+        char buffer_tx[BUFFERSIZE];
+
+	sprintf(buffer_tx,"d|%s",site_get_name(s));
+
+	worker_send_recive(w,buffer_tx,buffer_rx);
+	list_site_remove_id(worker_get_sites(w),site_get_id(s));
+	list_worker_remove_id(site_get_workers(s),worker_get_id(w));
+	return 1;
 }
 
 int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
@@ -729,6 +742,20 @@ void list_worker_add(T_list_worker *l, T_worker *w){
 	}
 }
 
+void list_worker_copy(T_list_worker *l, T_list_worker *l2){
+	/* Copia la lista l a l2. Los elementos son el mismo
+	 * y no se copian sino que son punteros */
+	/* Se supone que l2 esta vacia e inicializada */
+
+	list_w_node *aux;
+
+	aux = l->first;
+	while(aux!=NULL){
+		list_worker_add(l2,aux->data);
+		aux = aux->next;
+	}
+}
+
 void list_worker_first(T_list_worker *l){
 	/* Situa el puntero actual al inicio de la lista */
 	l->actual = l->first;
@@ -744,7 +771,26 @@ void list_worker_next(T_list_worker *l){
 T_worker *list_worker_get(T_list_worker *l){
 	/* Retorna el elemento donde el puntero actual se
 	 * encuentre. */
-	return l->actual->data;
+	if(l->actual!=NULL)
+		return l->actual->data;
+	else 
+		return NULL;
+}
+
+T_worker *list_worker_get_first(T_list_worker *l){
+	/* Retorna el primer elemento de la lista */
+	if(l->first!=NULL)
+		return l->first->data;
+	else
+		return NULL;
+}
+
+T_worker *list_worker_get_last(T_list_worker *l){
+	/* Retorna el ultimo elemento de la lista */
+	if(l->last!=NULL)
+		return l->last->data;
+	else
+		return NULL;
 }
 
 unsigned int list_worker_size(T_list_worker *l){
@@ -759,13 +805,16 @@ int list_worker_eol(T_list_worker *l){
 }
 
 T_worker *list_worker_remove_id(T_list_worker *l, int w_id){
-	/* Elimina de la lista el worker pasado por parametro */
+	/* Elimina de la lista el nodo que contiene al worker.
+ 	 * el puntero al worker es retornado */
 
 	int exist = 0;
 	list_w_node *aux;
 
+	printf("REMOVE ---- Removemos worker con id: %i\n",w_id);
 	l->actual = l->first;
 	while(!exist && l->actual != NULL){
+		printf("REMOVE ---- Comparamos %i con %i\n",worker_get_id(l->actual->data),w_id);
 		if(worker_get_id(l->actual->data) == w_id){
 			printf("list_worker_remove_id: Encontramos el worker a eliminar\n");
 			return list_worker_remove(l);
@@ -785,7 +834,6 @@ T_worker *list_worker_remove(T_list_worker *l){
 	list_w_node *aux;
 	T_worker *element;
 
-	printf("list_worker_remove: intentamos eliminar el worker en: %p\n",l->actual);
 	if(l->actual != NULL){
 		aux = l->first;
 		prio = NULL;
@@ -821,15 +869,16 @@ T_worker *list_worker_find_id(T_list_worker *l, int worker_id){
 	/* Retorna el worker buscando por su id. Si no
 	 * existe retorna null */
 
+	list_w_node *aux;
 	int exist = 0;
 
-	list_worker_first(l);
-	while(!list_worker_eol(l) && !exist){
-		exist = (worker_get_id(l->actual->data) == worker_id);
-		list_worker_next(l);
+	aux = l->first;
+	while(aux != NULL && !exist){
+		exist = (worker_get_id(aux->data) == worker_id);
+		if(!exist){ aux = aux->next;}
 	}
 	if(exist){
-		return l->actual->data;
+		return aux->data;
 	} else {
 		return NULL;
 	}
@@ -869,13 +918,9 @@ void list_worker_sort_by_site(T_list_worker *l,int des){
 
 	T_worker *worker1, *worker2;
 	int i,j;
-	//ERROOOOR
-	//printf("SORT: size=%i\n",l->size);
 	for(i=1;i<l->size;i++){
-		//printf("SORT: Entro primer for size= %i i=%i\n",l->size,i);
 		l->actual = l->first;
 		for(j=1;j<=(l->size - i);j++){
-			//printf("SORT: Entro segundo for size=%i j=%i\n",l->size,j);
 			worker1 = l->actual->data;
 			worker2 = l->actual->next->data;
 			if(des){
@@ -905,18 +950,6 @@ void list_worker_print(T_list_worker *l){
 	}
 	printf("--------------\n");
 }
-
-/*
-void list_worker_lock(T_list_worker *l){
-	printf("LOCK workers\n");
-	pthread_mutex_lock(&(l->lock));
-}
-
-void list_worker_unlock(T_list_worker *l){
-	printf("UN_LOCK workers\n");
-	pthread_mutex_unlock(&(l->lock));
-}
-*/
 
 /*****************************
 	 Lista de Sitios
@@ -1028,6 +1061,7 @@ T_site *list_site_remove(T_list_site *l){
 		l->actual = aux->next;
 		element = aux->data;
 		free(aux);
+		l->size--;
 	}
 	return element;
 }
@@ -1059,17 +1093,16 @@ void list_site_erase(T_list_site *l){
 		list_site_remove(l);
 	}
 }
-/*
-void list_site_lock(T_list_site *l){
-	printf("LOCK sites\n");
-	pthread_mutex_lock(&(l->lock));
-}
 
-void list_site_unlock(T_list_site *l){
-	printf("UN_LOCK sites\n");
-	pthread_mutex_unlock(&(l->lock));
+void list_site_print(T_list_site *l){
+	l->actual = l->first;
+	printf("PRINT SITES\n");
+	while(l->actual != NULL){
+		printf("Print Site: %s\n",site_get_name(l->actual->data));
+		l->actual = l->actual->next;
+	}
+	printf("--------------\n");
 }
-*/
 
 /*****************************
 	 Lista de Proxys
@@ -1157,6 +1190,7 @@ void list_proxy_remove(T_list_proxy *l){
 		}
 		l->actual = aux->next;
 		free(aux);
+		l->size--;
 	}
 }
 
@@ -1167,18 +1201,6 @@ void list_proxy_erase(T_list_proxy *l){
 		list_proxy_remove(l);
 	}
 }
-
-/*
-void list_proxy_lock(T_list_proxy *l){
-	printf("LOCK proxys\n");
-	pthread_mutex_lock(&(l->lock));
-}
-
-void list_proxy_unlock(T_list_proxy *l){
-	printf("UN_LOCK proxys\n");
-	pthread_mutex_unlock(&(l->lock));
-}
-*/
 
 /*****************************
 *	 Lista de alias

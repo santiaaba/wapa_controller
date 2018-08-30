@@ -38,6 +38,11 @@ void json_site(char **data, int *size, T_site *site){
 		*size = 1000;
 		*data = (char *) realloc(*data,*size);
 	}
+
+	if(site == NULL){
+		strcpy(*data,"{\"name\":\"SITE no existe\"}");
+		return;
+	}
 	
 	strcpy(*data,"{\"name\":\"");
 	strcat(*data,site_get_name(site));
@@ -132,6 +137,11 @@ void json_worker(char **data, int *size, T_worker *worker){
 	if(*size < 1000){
 		*size = 1000;
 		*data = (char *) realloc(*data,*size);
+	}
+	
+	if(worker == NULL){
+		strcpy(*data,"{\"name\":\"WORKER no existe\"}");
+		return;
 	}
 	
 	strcpy(*data,"{\"name\":\"");

@@ -136,3 +136,19 @@ int db_add_site(T_db *db, T_site **newsite, char *name, char *dir, unsigned int 
 		return 0;
 	}
 }
+
+void db_worker_stop(T_db *db, int id){
+	char query[200];
+
+	sprintf(query,"update worker set status=1 where id=%i",id);
+	printf("QEURY : %s\n",query);
+	mysql_query(db->con,query);
+}
+
+void db_worker_start(T_db *db, int id){
+	char query[200];
+
+	sprintf(query,"update worker set status=0 where id=%i",id);
+	printf("QEURY : %s\n",query);
+	mysql_query(db->con,query);
+}

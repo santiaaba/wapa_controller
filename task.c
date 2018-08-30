@@ -4,7 +4,7 @@ void random_task_id(T_taskid value){
 	/*Genera un string random para task_id */
 	char *string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	int i,j;
-
+	
 	for(j=0;j<TASKID_SIZE;j++){
 		i = rand() % 62;
 		//printf("i=%i\n",i);
@@ -42,7 +42,6 @@ void random_dir(char *dir){
 /*****************************
 	     TASK 
 ******************************/
-
 void task_init(T_task *t, T_tasktoken *token, T_task_type type, T_dictionary *data){
 	random_task_id(t->id);
 	t->token = token;
@@ -50,6 +49,7 @@ void task_init(T_task *t, T_tasktoken *token, T_task_type type, T_dictionary *da
 	t->data = data;
 	t->result = (char *)malloc(TASKRESULT_SIZE);
 	t->result_size = TASKRESULT_SIZE;
+	strcpy(t->result,"");
 }
 
 void task_destroy(T_task **t){
@@ -71,8 +71,11 @@ void task_get_sites(T_task *t, T_list_site *l){
 
 void task_get_site(T_task *t, T_list_site *l){
 	char *id;
+	T_site *site;
+
 	id = dictionary_get(t->data,"id");
-	json_site(&(t->result),&(t->result_size),list_site_find_id(l,atoi(id)));
+	site = list_site_find_id(l,atoi(id));
+	json_site(&(t->result),&(t->result_size),site);
 }
 
 char *task_get_result(T_task *t){
@@ -89,8 +92,11 @@ void task_get_workers(T_task *t, T_list_worker *l){
 
 void task_get_worker(T_task *t, T_list_worker *l){
 	char *id;
+	T_worker *worker;
+
 	id = dictionary_get(t->data,"id");
-	json_worker(&(t->result),&(t->result_size),list_worker_find_id(l,atoi(id)));
+	worker = list_worker_find_id(l,atoi(id));
+	json_worker(&(t->result),&(t->result_size),worker);
 }
 
 T_tasktoken *tob_get_token(T_task *t){
@@ -154,9 +160,19 @@ int task_mod_site(T_task *t, T_list_site *l, T_db *db){
 }
 
 int task_stop_worker(T_task *t, T_list_worker *l, T_db *db){
+	/* Detenemos el worker y lo indicamos en
+ 	 * la base de datos */
+	int id = atoi(dictionary_get(t->data,"id"));
+	worker_stop(list_worker_find_id(l,id));
+	//db_worker_stop(db,id);
 }
 
 int task_start_worker(T_task *t, T_list_worker *l, T_db *db){
+	/* Arrancamos el worker y lo indicamos en
+ 	 * la base de datos */
+	int id = atoi(dictionary_get(t->data,"id"));
+	worker_start(list_worker_find_id(l,id));
+	//db_worker_start(db,id);
 }
 
 int task_stop_site(T_task *t, T_list_site *l, T_db *db){

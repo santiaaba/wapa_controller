@@ -5,6 +5,7 @@
 #include "json.h"
 #include "dictionary.h"
 #include "db.h"
+#include <time.h>
 
 #ifndef JOB_H
 #define JOB_H

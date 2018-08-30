@@ -179,11 +179,23 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 	} else if(0 == strcmp("workers",value)) {
 		parce_data((char *)url,'/',&pos,value);
 		if(strlen(value)>0){
-			/* Se solicita info de un worker */
+			/* Son acciones sobre un worker */
 			data = malloc(sizeof(T_dictionary));
 			dictionary_init(data);
 			dictionary_add(data,"id",value);
-			task_init(task,&token,T_GET_WORKER,data);
+			parce_data((char *)url,'/',&pos,value);
+			if(strcmp(value,"stop") == 0){
+				/* Se solicita pausar un sitio */
+				task_init(task,&token,T_STOP_WORKER,data);
+			} else if(strcmp(value,"start") == 0){
+				/* Se solicita arrancar un sitio */
+				task_init(task,&token,T_START_WORKER,data);
+			} else if(strcmp(value,"") == 0){
+				/* Se solicita info de un worker */
+				task_init(task,&token,T_GET_WORKER,data);
+			} else {
+				/* ERROR de REST */
+			}
 		} else {
 			/* Se solicita listado de workers */
 			task_init(task,&token,T_GET_WORKERS,NULL);
