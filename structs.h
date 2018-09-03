@@ -237,6 +237,9 @@ void list_site_init(T_list_site *l);
 /* Coloca el punto al inicio de la lista*/
 void list_site_first(T_list_site *l);
 
+/* Copia un alista en otra de sitios */
+void list_site_copy(T_list_site *l, T_list_site *l2);
+
 /* Avanza el puntero un elemento en la lista*/
 void list_site_next(T_list_site *l);
 

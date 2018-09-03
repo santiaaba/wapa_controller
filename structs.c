@@ -544,6 +544,17 @@ int proxy_add_site(T_proxy *p, T_site *s){
 	T_worker *worker;
 	char aux[512];
 
+	/* Si el sitio no tiene workers e ntonces mas
+ 	 * que agregarlo lo eliminamos */
+
+	if(list_worker_size(site_get_workers(s)) == 0){
+		sprintf(buffer_tx,"d|%s",site_get_name(s));
+		if(!proxy_send_recive(p,buffer_tx,buffer_rx))
+			return 0;
+		return 1;
+	}
+	/* Si posee workers entonces proseguimos */
+
 	sprintf(buffer_tx,"A|%s|%lu|%i",site_get_name(s),
 		site_get_id(s),site_get_version(s));
 
@@ -997,6 +1008,21 @@ void list_site_next(T_list_site *l){
 		l->actual = l->actual->next;
 	}
 }
+
+void list_site_copy(T_list_site *l, T_list_site *l2){
+	/* Copia la lista l a l2. Los elementos son el mismo
+	 * y no se copian sino que son punteros */
+	/* Se supone que l2 esta vacia e inicializada */
+
+	list_s_node *aux;
+
+	aux = l->first;
+	while(aux!=NULL){
+		list_site_add(l2,aux->data);
+		aux = aux->next;
+	}
+}
+
 
 T_site *list_site_get(T_list_site *l){
 	/* Retorna el elemento donde el puntero actual se
