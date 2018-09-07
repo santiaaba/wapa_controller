@@ -36,17 +36,22 @@ int config_load(const char *filename, T_config *conf){
 	char val[20];
 
 	fp = fopen(filename,"r");
-	while(fgets(buf, sizeof(buf), fp) != NULL){
-		config_parce_line(&buf[0],&atr[0],&val[0]);
-		if(0 == strcmp(&atr[0],"db_server")){strcpy(conf->db_server,&val[0]);}
-		if(0 == strcmp(&atr[0],"db_name")){strcpy(conf->db_name,&val[0]);}
-		if(0 == strcmp(&atr[0],"db_user")){strcpy(conf->db_user,&val[0]);}
-		if(0 == strcmp(&atr[0],"db_pass")){strcpy(conf->db_pass,&val[0]);}
-		if(0 == strcmp(&atr[0],"default_domain")){strcpy(conf->default_domain,&val[0]);}
-		if(0 == strcmp(&atr[0],"load_average")){conf->load_average = atoi(&val[0]);}
-		if(0 == strcmp(&atr[0],"sites_average")){conf->sites_average = atoi(&val[0]);}
+	if(fp){
+		while(fgets(buf, sizeof(buf), fp) != NULL){
+			config_parce_line(&buf[0],&atr[0],&val[0]);
+			if(0 == strcmp(&atr[0],"db_server")){strcpy(conf->db_server,&val[0]);}
+			if(0 == strcmp(&atr[0],"db_name")){strcpy(conf->db_name,&val[0]);}
+			if(0 == strcmp(&atr[0],"db_user")){strcpy(conf->db_user,&val[0]);}
+			if(0 == strcmp(&atr[0],"db_pass")){strcpy(conf->db_pass,&val[0]);}
+			if(0 == strcmp(&atr[0],"default_domain")){strcpy(conf->default_domain,&val[0]);}
+			if(0 == strcmp(&atr[0],"load_average")){conf->load_average = atoi(&val[0]);}
+			if(0 == strcmp(&atr[0],"sites_average")){conf->sites_average = atoi(&val[0]);}
+		}
+		fclose(fp);
+		return 1;
+	} else {
+		return 0;
 	}
-	fclose(fp);
 }
 
 char *config_db_server(T_config *conf){

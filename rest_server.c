@@ -2,6 +2,24 @@
 
 /* La variable server_rest debe ser global */
 
+int check_data_mod_site(T_dictionary *data, char *message){
+	/* Verifica que los datos sean correctos. Si no lo
+ 	   son retorna un mensaje en su segundo parametro */
+	return 1;
+}
+
+int check_data_add_site(T_dictionary *data, char *message){
+	/* Verifica que los datos sean correctos. Si no lo
+ 	   son retorna un mensaje en su segundo parametro */
+	return 1;
+}
+
+int check_data_del_site(T_dictionary *data, char *message){
+	/* Verifica que los datos sean correctos. Si no lo
+ 	   son retorna un mensaje en su segundo parametro */
+	return 1;
+}
+
 void rest_server_add_task(T_rest_server *r, T_task *j){
 	printf("Agregamos el JOB: %s a la lista\n",task_get_id(j));
 
@@ -120,11 +138,15 @@ static int handle_POST(struct MHD_Connection *connection,
 		if(strlen(value)>0){
 			printf("modif de un sitio\n");
 			/* Modificacion de un sitio */
-			task_init(task,&token,T_MOD_SITE,con_info->data);
+			if(check_data_mod_site(con_info->data,result)){
+				task_init(task,&token,T_MOD_SITE,con_info->data);
+			}
 		} else {
 			printf("alta de un sitio\n");
 			/* Es el alta de un sitio */
-			task_init(task,&token,T_ADD_SITE,con_info->data);
+			if(check_data_add_site(con_info->data,result)){
+				task_init(task,&token,T_ADD_SITE,con_info->data);
+			}
 		}
 	} else if(0 == strcmp("workers",value)){
 		/* Acciones POST sobre un worker. A IMPLEMENTAR */
@@ -334,11 +356,11 @@ void rest_server_init(T_rest_server *r, T_list_site *sites, T_list_worker *worke
 }
 
 void rest_server_lock(T_rest_server *r){
-        /* seccion critica manejo de listas */
-        pthread_mutex_lock(&(r->mutex_lists));
+	/* seccion critica manejo de listas */
+	pthread_mutex_lock(&(r->mutex_lists));
 }
 
 void rest_server_unlock(T_rest_server *r){
-        /* seccion critica manejo de listas */
-        pthread_mutex_unlock(&(r->mutex_lists));
+	/* seccion critica manejo de listas */
+	pthread_mutex_unlock(&(r->mutex_lists));
 }

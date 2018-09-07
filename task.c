@@ -114,22 +114,18 @@ int task_add_site(T_task *t, T_list_site *l, T_db *db){
 	char sql[300];
 	char *name;
 	char *susc_id;
-	char dir[6];
 	char command[300];
+	char dir[10];
 	unsigned int id;
 	
-	printf("wueremos agregar un sitio\n");
+	printf("Agregar un sitio nuevo\n");
 	dictionary_print(t->data);
 	name = dictionary_get(t->data,"name");
 	susc_id = dictionary_get(t->data,"susc_id");
-	random_dir(dir);
-
-	printf("DATOS: -%s- -%s- -%s-\n",name,susc_id,dir);
 
 	/* Los tres valores anteriores no pueden ser vacio */
 	if(strcmp(susc_id,"") == 0){ return 0; }
 	if(strcmp(name,"") == 0){ return 0; }
-	if(strcmp(dir,"") == 0){ return 0; }
 
 	/* Verificamos que el sitio no exista ya con ese nombre */
 	printf("Verificamos si el sitio existe\n");
@@ -137,7 +133,7 @@ int task_add_site(T_task *t, T_list_site *l, T_db *db){
 
 	// Alta en la base de datos del sitio
 	printf("Alta a la base de datos\n");
-	if(!db_add_site(db,&newsite,name,dir,atoi(susc_id))){ return 0; }
+	if(!db_add_site(db,&newsite,name,atoi(susc_id),dir)){ return 0; }
 
 	// Creacion del espacio de almacenamiento
 	printf("Creacion de directorios\n");

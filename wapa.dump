@@ -16,64 +16,170 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Current Database: `wapa`
+-- Table structure for table `ftpgroup`
 --
 
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `wapa` /*!40100 DEFAULT CHARACTER SET latin1 */;
-
-USE `wapa`;
-
---
--- Table structure for table `proxy`
---
-
-DROP TABLE IF EXISTS `proxy`;
+DROP TABLE IF EXISTS `ftpgroup`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `proxy` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) NOT NULL,
-  `ipv4` varchar(15) NOT NULL,
+CREATE TABLE `ftpgroup` (
+  `groupname` varchar(16) NOT NULL DEFAULT '',
+  `gid` smallint(6) NOT NULL DEFAULT '5500',
+  `members` varchar(16) NOT NULL DEFAULT '',
+  KEY `groupname` (`groupname`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 COMMENT='ProFTP group table';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ftpgroup`
+--
+
+LOCK TABLES `ftpgroup` WRITE;
+/*!40000 ALTER TABLE `ftpgroup` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ftpgroup` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ftpquotalimits`
+--
+
+DROP TABLE IF EXISTS `ftpquotalimits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `ftpquotalimits` (
+  `name` varchar(30) DEFAULT NULL,
+  `quota_type` enum('user','group','class','all') NOT NULL DEFAULT 'user',
+  `per_session` enum('false','true') NOT NULL DEFAULT 'false',
+  `limit_type` enum('soft','hard') NOT NULL DEFAULT 'soft',
+  `bytes_in_avail` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `bytes_out_avail` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `bytes_xfer_avail` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `files_in_avail` int(10) unsigned NOT NULL DEFAULT '0',
+  `files_out_avail` int(10) unsigned NOT NULL DEFAULT '0',
+  `files_xfer_avail` int(10) unsigned NOT NULL DEFAULT '0'
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ftpquotalimits`
+--
+
+LOCK TABLES `ftpquotalimits` WRITE;
+/*!40000 ALTER TABLE `ftpquotalimits` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ftpquotalimits` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ftpquotatallies`
+--
+
+DROP TABLE IF EXISTS `ftpquotatallies`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `ftpquotatallies` (
+  `name` varchar(30) NOT NULL DEFAULT '',
+  `quota_type` enum('user','group','class','all') NOT NULL DEFAULT 'user',
+  `bytes_in_used` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `bytes_out_used` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `bytes_xfer_used` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `files_in_used` int(10) unsigned NOT NULL DEFAULT '0',
+  `files_out_used` int(10) unsigned NOT NULL DEFAULT '0',
+  `files_xfer_used` int(10) unsigned NOT NULL DEFAULT '0'
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ftpquotatallies`
+--
+
+LOCK TABLES `ftpquotatallies` WRITE;
+/*!40000 ALTER TABLE `ftpquotatallies` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ftpquotatallies` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `ftpuser`
+--
+
+DROP TABLE IF EXISTS `ftpuser`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `ftpuser` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `userid` varchar(32) NOT NULL DEFAULT '',
+  `passwd` varchar(32) NOT NULL DEFAULT '',
+  `uid` smallint(6) NOT NULL DEFAULT '5500',
+  `gid` smallint(6) NOT NULL DEFAULT '5500',
+  `homedir` varchar(255) NOT NULL DEFAULT '',
+  `shell` varchar(16) NOT NULL DEFAULT '/sbin/nologin',
+  `count` int(11) NOT NULL DEFAULT '0',
+  `accessed` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `modified` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
+  UNIQUE KEY `userid` (`userid`)
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=latin1 COMMENT='ProFTP user table';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ftpuser`
+--
+
+LOCK TABLES `ftpuser` WRITE;
+/*!40000 ALTER TABLE `ftpuser` DISABLE KEYS */;
+INSERT INTO `ftpuser` VALUES (1,'sdiaz','sAn474226',2001,2001,'/websites/00/00/sitio1','/sbin/nologin',11,'2018-09-04 15:18:02','2018-09-04 15:11:14');
+/*!40000 ALTER TABLE `ftpuser` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `nube`
+--
+
+DROP TABLE IF EXISTS `nube`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `nube` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(40) NOT NULL,
+  `tipo` int(11) DEFAULT NULL,
+  `ipv4` varchar(15) DEFAULT NULL,
+  `user` varchar(50) DEFAULT NULL,
+  `pass` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `proxy`
+-- Dumping data for table `nube`
 --
 
-LOCK TABLES `proxy` WRITE;
-/*!40000 ALTER TABLE `proxy` DISABLE KEYS */;
-/*!40000 ALTER TABLE `proxy` ENABLE KEYS */;
+LOCK TABLES `nube` WRITE;
+/*!40000 ALTER TABLE `nube` DISABLE KEYS */;
+/*!40000 ALTER TABLE `nube` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `site`
+-- Table structure for table `plan`
 --
 
-DROP TABLE IF EXISTS `site`;
+DROP TABLE IF EXISTS `plan`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `site` (
+CREATE TABLE `plan` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `version` int(11) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `size` int(11) NOT NULL DEFAULT '1',
-  `susc_id` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
+  `name` varchar(50) DEFAULT NULL,
+  `status` int(11) NOT NULL DEFAULT '1',
+  `max` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `site`
+-- Dumping data for table `plan`
 --
 
-LOCK TABLES `site` WRITE;
-/*!40000 ALTER TABLE `site` DISABLE KEYS */;
-INSERT INTO `site` VALUES (1,1,'sitio1',1,1),(2,1,'sitio2',1,1);
-/*!40000 ALTER TABLE `site` ENABLE KEYS */;
+LOCK TABLES `plan` WRITE;
+/*!40000 ALTER TABLE `plan` DISABLE KEYS */;
+/*!40000 ALTER TABLE `plan` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -87,6 +193,7 @@ CREATE TABLE `suscription` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
   `name` varchar(50) NOT NULL,
+  `status` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -97,7 +204,7 @@ CREATE TABLE `suscription` (
 
 LOCK TABLES `suscription` WRITE;
 /*!40000 ALTER TABLE `suscription` DISABLE KEYS */;
-INSERT INTO `suscription` VALUES (1,1,'demo');
+INSERT INTO `suscription` VALUES (1,1,'demo',NULL);
 /*!40000 ALTER TABLE `suscription` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -112,8 +219,10 @@ CREATE TABLE `user` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(50) NOT NULL,
   `pass` varchar(50) NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+  `email` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -122,18 +231,43 @@ CREATE TABLE `user` (
 
 LOCK TABLES `user` WRITE;
 /*!40000 ALTER TABLE `user` DISABLE KEYS */;
-INSERT INTO `user` VALUES (1,'santiago','QwertY1234');
+INSERT INTO `user` VALUES (1,'santiago','QwertY1234','santiaaba@hotmail.com'),(2,'rocio','(null)','rocio@lab.fibercorp.com.ar');
 /*!40000 ALTER TABLE `user` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `worker`
+-- Table structure for table `web_alias`
 --
 
-DROP TABLE IF EXISTS `worker`;
+DROP TABLE IF EXISTS `web_alias`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `worker` (
+CREATE TABLE `web_alias` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `site_id` int(11) DEFAULT NULL,
+  `alias` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `web_alias`
+--
+
+LOCK TABLES `web_alias` WRITE;
+/*!40000 ALTER TABLE `web_alias` DISABLE KEYS */;
+INSERT INTO `web_alias` VALUES (1,1,'www.demo.com.ar'),(2,1,'www.demo.com'),(3,1,'www.demo.net.ar');
+/*!40000 ALTER TABLE `web_alias` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `web_proxy`
+--
+
+DROP TABLE IF EXISTS `web_proxy`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `web_proxy` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `ipv4` varchar(15) NOT NULL,
@@ -144,13 +278,93 @@ CREATE TABLE `worker` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `worker`
+-- Dumping data for table `web_proxy`
 --
 
-LOCK TABLES `worker` WRITE;
-/*!40000 ALTER TABLE `worker` DISABLE KEYS */;
-INSERT INTO `worker` VALUES (1,'worker01','10.120.78.213',0);
-/*!40000 ALTER TABLE `worker` ENABLE KEYS */;
+LOCK TABLES `web_proxy` WRITE;
+/*!40000 ALTER TABLE `web_proxy` DISABLE KEYS */;
+INSERT INTO `web_proxy` VALUES (1,'proxy01','10.120.78.217',0);
+/*!40000 ALTER TABLE `web_proxy` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `web_site`
+--
+
+DROP TABLE IF EXISTS `web_site`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `web_site` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `version` int(11) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `size` int(11) NOT NULL DEFAULT '1',
+  `susc_id` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `web_site`
+--
+
+LOCK TABLES `web_site` WRITE;
+/*!40000 ALTER TABLE `web_site` DISABLE KEYS */;
+INSERT INTO `web_site` VALUES (1,1,'sitio1',1,1),(2,1,'sitio2',1,1),(6,1,'unamas',1,1),(10,1,'unamasyvan2',1,1);
+/*!40000 ALTER TABLE `web_site` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `web_suscription`
+--
+
+DROP TABLE IF EXISTS `web_suscription`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `web_suscription` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `hash_dir` varchar(5) NOT NULL,
+  `suscription_id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `web_suscription`
+--
+
+LOCK TABLES `web_suscription` WRITE;
+/*!40000 ALTER TABLE `web_suscription` DISABLE KEYS */;
+INSERT INTO `web_suscription` VALUES (1,'00/00',1);
+/*!40000 ALTER TABLE `web_suscription` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `web_worker`
+--
+
+DROP TABLE IF EXISTS `web_worker`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `web_worker` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `ipv4` varchar(15) NOT NULL,
+  `status` int(11) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `web_worker`
+--
+
+LOCK TABLES `web_worker` WRITE;
+/*!40000 ALTER TABLE `web_worker` DISABLE KEYS */;
+INSERT INTO `web_worker` VALUES (1,'worker01','10.120.78.213',0),(3,'worker02','10.120.78.214',0);
+/*!40000 ALTER TABLE `web_worker` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -162,4 +376,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-08-07 10:08:57
+-- Dump completed on 2018-09-07 16:27:28

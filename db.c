@@ -27,7 +27,7 @@ int db_find_site(T_db *db, char *name){
 	int resultado;
 	MYSQL_ROW row;
 
-	sprintf(query,"select count(*) from site where name='%s'",name);
+	sprintf(query,"select count(*) from web_site where name='%s'",name);
 	printf("Pasamos 1: %s\n",query);
 	mysql_query(db->con,query);
 	printf("Pasamos 2\n");
@@ -49,19 +49,18 @@ void db_load_sites(T_db *db, T_list_site *l){
 	T_site *new_site;
 	T_alias *new_alias;
 
-	strcpy(query,"select * from site");
+	strcpy(query,"select s.id,name,hash_dir,version,size from web_site s inner join web_suscription p on (s.susc_id = p.id)");
 
 	mysql_query(db->con,query);
 	MYSQL_RES *result = mysql_store_result(db->con);
 
 	while ((row = mysql_fetch_row(result))){
 		new_site = (T_site*)malloc(sizeof(T_site));
-		printf("DB ID: %i SUSC: %i\n",atoi(row[5]),atoi(row[4]));
 		
-		site_init(new_site,row[2],atoi(row[0]),row[5],atoi(row[1]),atoi(row[3]));
+		site_init(new_site,row[1],atoi(row[0]),row[2],atoi(row[3]),atoi(row[4]));
 
 		/* Cargamos los alias */
-		sprintf(query,"select id,alias from alias where site_id=%s\n",row[0]);
+		sprintf(query,"select id,alias from web_alias where site_id=%s\n",row[0]);
 		printf("Consulta para obtener los alias del sitio id %s: %s\n",row[0],query);
 		mysql_query(db->con,query);
 		MYSQL_RES *result_alias = mysql_store_result(db->con);
@@ -80,7 +79,7 @@ void db_load_workers(T_db *db, T_list_worker *l){
 	MYSQL_ROW row;
 	T_worker *new_worker;
 
-	strcpy(query,"select * from worker");
+	strcpy(query,"select * from web_worker");
 
 	mysql_query(db->con,query);
 	MYSQL_RES *result = mysql_store_result(db->con);
@@ -98,7 +97,7 @@ void db_load_proxys(T_db *db, T_list_proxy *l){
 	MYSQL_ROW row;
 	T_proxy *new_proxy;
 
-	strcpy(query,"select id,name,ipv4,status from proxy");
+	strcpy(query,"select id,name,ipv4,status from web_proxy");
 
 	mysql_query(db->con,query);
 	MYSQL_RES *result = mysql_store_result(db->con);
@@ -111,16 +110,18 @@ void db_load_proxys(T_db *db, T_list_proxy *l){
 	}
 }
 
-int db_add_site(T_db *db, T_site **newsite, char *name, char *dir, unsigned int susc_id){
+int db_add_site(T_db *db, T_site **newsite, char *name, unsigned int susc_id, char *dir){
 	/* Agrega un sitio a la base de datos.
- 	 * Si no pudo hacerlo retorna 0 sino 1 */
+ 	 * Si no pudo hacerlo retorna 0 sino 1
+	 * En el parametro dir retorna el directorio
+	 * obtenido de la suscripcion que le corresponde */
 
 	char query[300];
 	MYSQL_RES *result;
+	MYSQL_ROW row;
 	unsigned int site_id;
-	
 
-	sprintf(query,"insert into site(version,name,size,susc_id,dir) values(1,\"%s\",1,%lu,\"%s\")",
+	sprintf(query,"insert into web_site(version,name,size,susc_id) values(1,\"%s\",1,%lu)",
                 name,susc_id,dir);
 
 	mysql_query(db->con,query);
@@ -129,18 +130,29 @@ int db_add_site(T_db *db, T_site **newsite, char *name, char *dir, unsigned int 
 		mysql_insert_id(db->con) != 0){
 		
 		site_id = mysql_insert_id(db->con);
-		(*newsite) = (T_site *)malloc(sizeof(T_site));
-		site_init(*newsite,name,site_id,dir,1,1);
-		return 1;
+
+		/*Obtenemos el directorio */
+		sprintf(query,"select hash_dir from web_suscription where id=%i",susc_id);
+		printf("query: %s\n",query);
+		mysql_query(db->con,query);
+		result = mysql_store_result(db->con);
+		if(row = mysql_fetch_row(result)){
+			(*newsite) = (T_site *)malloc(sizeof(T_site));
+			site_init(*newsite,name,site_id,row[0],1,1);
+			strcpy(dir,row[0]);
+		} else {
+			return 0;
+		}
 	} else {
 		return 0;
 	}
+	return 1;
 }
 
 void db_worker_stop(T_db *db, int id){
 	char query[200];
 
-	sprintf(query,"update worker set status=1 where id=%i",id);
+	sprintf(query,"update web_worker set status=1 where id=%i",id);
 	printf("QEURY : %s\n",query);
 	mysql_query(db->con,query);
 }
@@ -148,7 +160,7 @@ void db_worker_stop(T_db *db, int id){
 void db_worker_start(T_db *db, int id){
 	char query[200];
 
-	sprintf(query,"update worker set status=0 where id=%i",id);
+	sprintf(query,"update web_worker set status=0 where id=%i",id);
 	printf("QEURY : %s\n",query);
 	mysql_query(db->con,query);
 }

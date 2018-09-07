@@ -367,7 +367,8 @@ void main(){
 	srand(time(NULL));
 
 	/* Cargamos la configuracion */
-	config_load("controller.conf",&config);
+	if(!config_load("controller.conf",&config))
+		exit(1);
 
 	printf("db_server : %s\n",config_db_server(&config));
 	printf("db_user : %s\n",config_db_user(&config));
