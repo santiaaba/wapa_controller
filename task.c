@@ -42,9 +42,9 @@ void random_dir(char *dir){
 /*****************************
 	     TASK 
 ******************************/
-void task_init(T_task *t, T_tasktoken *token, T_task_type type, T_dictionary *data){
+void task_init(T_task *t, T_task_type type, T_dictionary *data){
 	random_task_id(t->id);
-	t->token = token;
+	random_token(t->token);
 	t->type = type;
 	t->data = data;
 	t->result = (char *)malloc(TASKRESULT_SIZE);
@@ -65,11 +65,11 @@ void task_destroy(T_task **t){
 	free(*t);
 }
 
-void task_get_sites(T_task *t, T_list_site *l){
+void task_site_list(T_task *t, T_list_site *l){
 	json_sites(&(t->result),&(t->result_size),l);
 }
 
-void task_get_site(T_task *t, T_list_site *l){
+void task_site_show(T_task *t, T_list_site *l){
 	char *id;
 	T_site *site;
 
@@ -86,11 +86,11 @@ char *task_get_id(T_task *t){
 	return t->id;
 }
 
-void task_get_workers(T_task *t, T_list_worker *l){
+void task_worker_list(T_task *t, T_list_worker *l){
 	json_workers(&(t->result),&(t->result_size),l);
 }
 
-void task_get_worker(T_task *t, T_list_worker *l){
+void task_worker_show(T_task *t, T_list_worker *l){
 	char *id;
 	T_worker *worker;
 
@@ -99,7 +99,7 @@ void task_get_worker(T_task *t, T_list_worker *l){
 	json_worker(&(t->result),&(t->result_size),worker);
 }
 
-T_tasktoken *tob_get_token(T_task *t){
+char *task_get_token(T_task *t){
 	return t->token;
 }
 
@@ -107,7 +107,7 @@ char *tob_get_id(T_task *t){
 	return t->id;
 }
 
-int task_add_site(T_task *t, T_list_site *l, T_db *db){
+int task_site_add(T_task *t, T_list_site *l, T_db *db){
 	/* Agrega un sitio a la solucion */
 
 	T_site *newsite;
@@ -149,13 +149,13 @@ int task_add_site(T_task *t, T_list_site *l, T_db *db){
 	return 1;
 }
 
-int task_del_site(T_task *t, T_list_site *l, T_db *db){
+int task_site_del(T_task *t, T_list_site *l, T_db *db){
 }
 
-int task_mod_site(T_task *t, T_list_site *l, T_db *db){
+int task_site_mod(T_task *t, T_list_site *l, T_db *db){
 }
 
-int task_stop_worker(T_task *t, T_list_worker *l, T_db *db){
+int task_worker_stop(T_task *t, T_list_worker *l, T_db *db){
 	/* Detenemos el worker y lo indicamos en
  	 * la base de datos */
 	int id = atoi(dictionary_get(t->data,"id"));
@@ -163,7 +163,7 @@ int task_stop_worker(T_task *t, T_list_worker *l, T_db *db){
 	//db_worker_stop(db,id);
 }
 
-int task_start_worker(T_task *t, T_list_worker *l, T_db *db){
+int task_worker_start(T_task *t, T_list_worker *l, T_db *db){
 	/* Arrancamos el worker y lo indicamos en
  	 * la base de datos */
 	int id = atoi(dictionary_get(t->data,"id"));
@@ -171,10 +171,34 @@ int task_start_worker(T_task *t, T_list_worker *l, T_db *db){
 	//db_worker_start(db,id);
 }
 
-int task_stop_site(T_task *t, T_list_site *l, T_db *db){
+int task_site_stop(T_task *t, T_list_site *l, T_db *db){
 }
 
-int task_start_site(T_task *t, T_list_site *l, T_db *db){
+int task_site_start(T_task *t, T_list_site *l, T_db *db){
+}
+
+void task_show(T_task *t){
+}
+
+T_task_type task_c_to_type(char c){
+	switch(c){
+		case 't': return T_TASK_SHOW;
+		case 'l': return T_SITE_LIST;
+		case 's': return T_SITE_SHOW;
+		case 'a': return T_SITE_ADD;
+		case 'm': return T_SITE_MOD;
+		case 'd': return T_SITE_DEL;
+		case 'k': return T_SITE_STOP;
+		case 'e': return T_SITE_START;
+
+		case 'L': return T_SERVER_LIST;
+		case 'S': return T_SERVER_SHOW;
+		case 'A': return T_SERVER_ADD;
+		case 'M': return T_SERVER_MOD;
+		case 'D': return T_SERVER_DEL;
+		case 'K': return T_SERVER_STOP;
+		case 'E': return T_SERVER_START;
+	}
 }
 
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
@@ -185,28 +209,31 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 	printf("paso\n");
 
 	switch(t->type){
-		case T_GET_SITES:
-			task_get_sites(t,sites); break;
-		case T_GET_SITE:
-			task_get_site(t,sites); break;
-		case T_GET_WORKERS:
-			task_get_workers(t,workers); break;
-		case T_GET_WORKER:
-			task_get_worker(t,workers); break;
-		case T_ADD_SITE:
-			task_add_site(t,sites,db); break;
-		case T_DEL_SITE:
-			task_del_site(t,sites,db); break;
-		case T_MOD_SITE:
-			task_mod_site(t,sites,db); break;
-		case T_STOP_WORKER:
-			task_stop_worker(t,workers,db); break;
-		case T_START_WORKER:
-			task_start_worker(t,workers,db); break;
-		case T_STOP_SITE:
-			task_stop_site(t,sites,db); break;
-		case T_START_SITE:
-			task_start_site(t,sites,db); break;
+		case T_TASK_SHOW:
+			task_show(t); break;
+		case T_SITE_LIST:
+			task_site_list(t,sites); break;
+		case T_SITE_SHOW:
+			task_site_show(t,sites); break;
+		case T_SITE_ADD:
+			task_site_add(t,sites,db); break;
+		case T_SITE_DEL:
+			task_site_del(t,sites,db); break;
+		case T_SITE_MOD:
+			task_site_mod(t,sites,db); break;
+		case T_SITE_STOP:
+			task_site_stop(t,sites,db); break;
+		case T_SITE_START:
+			task_site_start(t,sites,db); break;
+
+//		case T_SERVER_LIST:
+//			task_server_list(t,workers); break;
+//		case T_SERVER_SHOW:
+//			task_server_show(t,workers); break;
+//		case T_SERVER_STOP:
+//			task_server_stop(t,workers,db); break;
+//		case T_SERVER_START:
+//			task_server_start(t,workers,db); break;
 	}
 	t->status = T_DONE;
 }

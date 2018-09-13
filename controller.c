@@ -5,7 +5,7 @@
 #include "db.h"
 #include "config.h"
 #include <pthread.h>
-#include "rest_server.h"
+#include "server.h"
 
 /********************************
  * 	Variables GLOBALES	*
@@ -15,7 +15,7 @@ T_list_worker workers;
 T_list_proxy proxys;
 T_list_site sites;
 T_db db;
-T_rest_server rest_server;
+T_server server;
 
 /********************************
  * 	FUNCIONES		*
@@ -394,6 +394,7 @@ void main(){
 	db_load_proxys(&db,&proxys);
 
 	/* Imprimimos la lista de sitios */
+	printf("Imprimimos lista de sitios\n");
 	list_site_first(&sites);
 	while(!list_site_eol(&sites)){
 		printf("sitio cargado %s\n", site_get_name(list_site_get(&sites)));
@@ -407,13 +408,16 @@ void main(){
 	printf("--FIN Sincronizamos workers--\n");
 
 	/* Iniciamos el server REST para la API */
-	rest_server_init(&rest_server,&sites,&workers,&proxys,&db);
-	printf("El rest server posee puntero %p\n",rest_server);
+	server_init(&server,&sites,&workers,&proxys,&db);
+	printf("El rest server posee puntero %p\n",server);
 
 	/* Comenzamos el loop del controller */
 	while(1){
+		sleep(5);
+		continue;	// Probando server. Eliminar luego //
+
 		changed = 0;
-		rest_server_lock(&rest_server);
+		server_lock(&server);
 
 		/* Chequeo de workers */
 		check_workers(&workers,&proxys,&config);
@@ -425,12 +429,11 @@ void main(){
 
 		/* Balanceamos workers */
 		changed |= balance_workers(&workers,&proxys,&config);
-		rest_server_unlock(&rest_server);
+		server_unlock(&server);
 
 		if(changed)
 			reload_services(&workers,&proxys);
 
-		sleep(5);
 		printf("Fin del bucle");
 	}
 

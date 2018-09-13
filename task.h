@@ -15,17 +15,23 @@
 #define TASKRESULT_SIZE		200
 
 typedef enum {	
-		T_GET_SITES,
-		T_GET_SITE,
-		T_GET_WORKERS,
-		T_GET_WORKER,
-		T_ADD_SITE,
-		T_DEL_SITE,
-		T_MOD_SITE,
-		T_STOP_WORKER,
-		T_START_WORKER,
-		T_STOP_SITE,
-		T_START_SITE
+		T_TASK_SHOW,
+
+		T_SITE_LIST,
+		T_SITE_SHOW,
+		T_SITE_ADD,
+		T_SITE_MOD,
+		T_SITE_DEL,
+		T_SITE_STOP,
+		T_SITE_START,
+
+		T_SERVER_LIST,
+		T_SERVER_SHOW,
+		T_SERVER_ADD,
+		T_SERVER_MOD,
+		T_SERVER_DEL,
+		T_SERVER_STOP,
+		T_SERVER_START
 } T_task_type;
 
 typedef enum {
@@ -50,7 +56,7 @@ typedef char T_tasktoken[TOKEN_SIZE];
 ******************************/
 typedef struct {
         T_taskid id;
-        T_tasktoken *token;
+        T_tasktoken token;
 	T_task_user user;		//determina el usuario que es y por las acciones permitidas
 	T_task_type type;		//tipo de accion a realizar
 	T_task_status status;		//estado del task
@@ -59,25 +65,30 @@ typedef struct {
 	unsigned int result_size;	//datos para realizar la accion
 } T_task;
 
-void task_init(T_task *t, T_tasktoken *token, T_task_type type, T_dictionary *data);
+T_task_type task_c_to_type(char c);
+
+void task_init(T_task *t, T_task_type type, T_dictionary *data);
 void task_destroy(T_task **t);
-void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
-	T_list_proxy *proxys,T_db *db);
-T_tasktoken *task_get_token(T_task *t);
+void task_run(T_task *t, T_list_site *sites, T_list_worker *workers, T_list_proxy *proxys,T_db *db);
+char *task_get_token(T_task *t);
 char *task_get_id(T_task *t);
 char *task_get_result(T_task *t);
 
-void task_get_sites(T_task *t, T_list_site *l);
-void task_get_site(T_task *t, T_list_site *l);
-void task_get_workers(T_task *t, T_list_worker *l);
-void task_get_worker(T_task *t, T_list_worker *l);
-int task_add_site(T_task *t, T_list_site *l, T_db *db);
-int task_del_site(T_task *t, T_list_site *l, T_db *db);
-int task_mod_site(T_task *t, T_list_site *l, T_db *db);
-int task_stop_worker(T_task *t, T_list_worker *l, T_db *db);
-int task_start_worker(T_task *t, T_list_worker *l, T_db *db);
-int task_stop_site(T_task *t, T_list_site *l, T_db *db);
-int task_start_site(T_task *t, T_list_site *l, T_db *db);
+void task_show(T_task *t);
+
+void task_site_list(T_task *t, T_list_site *l);
+void task_site_show(T_task *t, T_list_site *l);
+int task_site_add(T_task *t, T_list_site *l, T_db *db);
+int task_site_del(T_task *t, T_list_site *l, T_db *db);
+int task_site_mod(T_task *t, T_list_site *l, T_db *db);
+int task_site_stop(T_task *t, T_list_site *l, T_db *db);
+int task_site_start(T_task *t, T_list_site *l, T_db *db);
+
+void task_worker_list(T_task *t, T_list_worker *l);
+void task_worker_show(T_task *t, T_list_worker *l);
+int task_worker_stop(T_task *t, T_list_worker *l, T_db *db);
+int task_worker_start(T_task *t, T_list_worker *l, T_db *db);
+
 
 /*****************************
          Cola de tareas
