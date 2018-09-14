@@ -71,22 +71,24 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result, unsigned int 
 	pthread_mutex_unlock(&(s->mutex_bag_task));
 }
 
+IMPLEMENTER como pasar el buffer al diccionario
+
 void buffer_to_dictionary(char *buffer_rx, T_dictionary *data){
 	int pos=2;
 	int largo;
 	char name[100];
 	char value[100];
 
+	/* Dependiendo del task son los datos que deberia tener el buffer_rx */
 	largo = strlen(buffer_rx);
 	while(pos<largo){
-		parce_data(buffer_rx,'|',&pos,name);
+		parce_data_site_list(buffer_rx,'|',&pos,name);
 		parce_data(buffer_rx,'|',&pos,value);
 		dictionary_add(data,name,value);
 	}
 }
 
 int create_task(T_task **task, char *buffer_rx){
-	int pos=0;
 	char value[100];
 	char command;
 	T_dictionary *data;
@@ -95,57 +97,59 @@ int create_task(T_task **task, char *buffer_rx){
 	data=(T_dictionary *)malloc(sizeof(T_dictionary));
 	dictionary_init(data);
 	buffer_to_dictionary(buffer_rx,data);
-	parce_data(buffer_rx,'|',&pos,value);
-	task_init(*task,task_c_to_type(value[0]),data);
+	task_init(*task,task_c_to_type(buffer_rx[0]),data);
 	return 1;
 }
 
 void *server_listen(void *param){
+	/*
 	struct sockaddr_in server;
 	struct sockaddr_in client;
 	int fd_server;
 	int fd_client;
-	int sin_size;
+	int sin_size;*/
 	char buffer_rx[BUFFER_SIZE];
 	char buffer_tx[BUFFER_SIZE];
 	T_task *task;
 	T_server *s= (T_server *)param;
 
-	if ((fd_server=socket(AF_INET, SOCK_STREAM, 0)) == -1 ) {
+	if ((s->fd_server=socket(AF_INET, SOCK_STREAM, 0)) == -1 ) {
 		printf("error en socket()\n");
 		exit(1);
 	}
-	server.sin_family = AF_INET;
-	server.sin_port = htons(PORT);
-	server.sin_addr.s_addr = INADDR_ANY;
+	s->server.sin_family = AF_INET;
+	s->server.sin_port = htons(PORT);
+	s->server.sin_addr.s_addr = INADDR_ANY;
 
-	if(bind(fd_server,(struct sockaddr*)&server, sizeof(struct sockaddr))<0) {
+	if(bind(s->fd_server,(struct sockaddr*)&(s->server), sizeof(struct sockaddr))<0) {
 		printf("error en bind() \n");
 		exit(1);
 	}
 
-	if(listen(fd_server,BACKLOG) == -1) {  /* llamada a listen() */
+	if(listen(s->fd_server,BACKLOG) == -1) {  /* llamada a listen() */
 		printf("error en listen()\n");
 		exit(1);
 	}
-	sin_size=sizeof(struct sockaddr_in);
+	s->sin_size=sizeof(struct sockaddr_in);
 
 	while(1){
 		printf("Esperando conneccion desde el cliente()\n"); //Debemos mantener viva la conexion
-		if ((fd_client = accept(fd_server,(struct sockaddr *)&client,&sin_size))<0) {
+		if ((s->fd_client = accept(s->fd_server,(struct sockaddr *)&(s->client),&(s->sin_size)))<0) {
 			printf("error en accept()\n");
 			exit(1);
 		}
 
 		// Aguardamos continuamente que el cliente envie un comando
-		while(recv(fd_client,buffer_rx,BUFFER_SIZE,0)>0){
+		while(recv(s->fd_client,buffer_rx,BUFFER_SIZE,0)>0){
 			printf("Recibimos -%s-\n",buffer_rx);
 			/* Creamos el task */
 			if(create_task(&task,buffer_rx)){
 				server_add_task(s,task);
+				sprintf(buffer_tx,"1|%s",task_get_id(task));
+				send(s->fd_client,buffer_tx,BUFFER_SIZE,0);
 			}
 		}
-		close(fd_client);
+		close(s->fd_client);
 	}
 }
 

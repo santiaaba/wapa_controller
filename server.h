@@ -25,6 +25,11 @@ typedef struct t_r_server {
         T_list_worker *workers;
         T_list_proxy *proxys;
 	T_db *db;
+	struct sockaddr_in server;
+        struct sockaddr_in client;
+	int fd_server;
+        int fd_client;
+        int sin_size;
 } T_server;
 
 extern T_server server;

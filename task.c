@@ -5,11 +5,12 @@ void random_task_id(T_taskid value){
 	char *string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	int i,j;
 	
-	for(j=0;j<TASKID_SIZE;j++){
+	for(j=0;j<TASKID_SIZE-1;j++){
 		i = rand() % 62;
 		//printf("i=%i\n",i);
 		value[j] = string[i];
 	}
+	value[TASKID_SIZE] = '\0';
 }
 
 void random_token(T_tasktoken value){
@@ -178,11 +179,14 @@ int task_site_start(T_task *t, T_list_site *l, T_db *db){
 }
 
 void task_show(T_task *t){
+	/* Retorna el resultado de un task */
+	IMPLEMENTAR
 }
 
 T_task_type task_c_to_type(char c){
 	switch(c){
 		case 't': return T_TASK_SHOW;
+
 		case 'l': return T_SITE_LIST;
 		case 's': return T_SITE_SHOW;
 		case 'a': return T_SITE_ADD;
