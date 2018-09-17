@@ -14,7 +14,7 @@ void json_sites(char **data, int *size, T_list_site *sites){
 		if((40 + strlen(*data)) > *size){
 			/* Los datos pueden superan el espacio de data */
 			*size = *size + 100;
-			*data = (char *) realloc(*data,*size);
+			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
 		sprintf(*data,"%s%lu,",*data,site_get_id(site));
 		list_site_next(sites);
@@ -36,7 +36,7 @@ void json_site(char **data, int *size, T_site *site){
 	/* Por las dudas verificamos que data sea de al menos 1000 bytes */
 	if(*size < 1000){
 		*size = 1000;
-		*data = (char *) realloc(*data,*size);
+		*data = (char *) realloc(*data,*size * sizeof(char));
 	}
 
 	if(site == NULL){
@@ -64,7 +64,7 @@ void json_site(char **data, int *size, T_site *site){
 		name = alias_get_name(alias);
 		if(*size < (strlen(name) + 150)){
 			*size = *size + 1000;
-			*data = (char *) realloc(*data,*size);
+			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
 		strcat(*data,"{\"id\":\"");
 		sprintf(aux,"%lu",alias_get_id(alias));
@@ -84,7 +84,7 @@ void json_site(char **data, int *size, T_site *site){
 		name = worker_get_name(worker);
 		if(*size < (strlen(name) + 50)){
 			*size = *size + 1000;
-			*data = (char *) realloc(*data,*size);
+			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
 		strcat(*data,"{\"name\":\"");
 		strcat(*data,worker_get_name(worker));
@@ -93,7 +93,7 @@ void json_site(char **data, int *size, T_site *site){
 	}
 	if(*size < (strlen(*data) + 3)){
 		*size = *size + 3;
-		*data = (char *) realloc(*data,*size);
+		*data = (char *) realloc(*data,*size * sizeof(char));
 	}
 	(*data)[strlen(*data)-1] = ']';
 	strcat(*data,"}");
@@ -113,7 +113,7 @@ void json_workers(char **data, int *size, T_list_worker *workers){
 		if((40 + strlen(*data)) > *size){
 			/* Los datos pueden superan el espacio de data */
 			*size = *size + 100;
-			*data = (char *) realloc(*data,*size);
+			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
 		sprintf(*data,"%s%lu,",*data,worker_get_id(worker));
 		list_worker_next(workers);
@@ -136,7 +136,7 @@ void json_worker(char **data, int *size, T_worker *worker){
 	/* Por las dudas verificamos que data sea de al menos 1000 bytes */
 	if(*size < 1000){
 		*size = 1000;
-		*data = (char *) realloc(*data,*size);
+		*data = (char *) realloc(*data,*size * sizeof(char));
 	}
 	
 	if(worker == NULL){
@@ -165,7 +165,7 @@ void json_worker(char **data, int *size, T_worker *worker){
 		sprintf(id,"%lu",site_get_id(site));
 		if(*size < (strlen(name) + strlen(aux) + strlen(*data) + 100)){
 			*size = *size + 1000;
-			*data = (char *) realloc(*data,*size);
+			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
 		strcat(*data,"{\"id\":\"");
 		sprintf(aux,"%s",id);
@@ -177,7 +177,7 @@ void json_worker(char **data, int *size, T_worker *worker){
 	}
 	if(*size < (strlen(*data) + 3)){
 		*size = *size + 3;
-		*data = (char *) realloc(*data,*size);
+		*data = (char *) realloc(*data,*size * sizeof(char));
 	}
 	(*data)[strlen(*data)-1] = ']';
 	strcat(*data,"}");

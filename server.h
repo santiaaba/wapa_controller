@@ -7,10 +7,10 @@
 #include "task.h"
 
 #define PORT		8888
-#define POSTBUFFERSIZE  512
 #define MAXNAMESIZE     20
 #define MAXANSWERSIZE   512
-#define BUFFER_SIZE	1000
+#define BUFFER_SIZE	1024
+#define HEAD_SIZE	1
 #define BACKLOG 	1 /* El número de conexiones permitidas */
 
 typedef struct t_r_server {
@@ -36,9 +36,5 @@ extern T_server server;
 
 void server_init(T_server *s, T_list_site *sites, T_list_worker *workers,
 		 T_list_proxy *proxys, T_db *db);
-
-void server_add_task(T_server *s, T_task *t);
-
 void server_lock(T_server *s);
-
 void server_unlock(T_server *s);

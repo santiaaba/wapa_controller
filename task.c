@@ -178,15 +178,8 @@ int task_site_stop(T_task *t, T_list_site *l, T_db *db){
 int task_site_start(T_task *t, T_list_site *l, T_db *db){
 }
 
-void task_show(T_task *t){
-	/* Retorna el resultado de un task */
-	IMPLEMENTAR
-}
-
 T_task_type task_c_to_type(char c){
 	switch(c){
-		case 't': return T_TASK_SHOW;
-
 		case 'l': return T_SITE_LIST;
 		case 's': return T_SITE_SHOW;
 		case 'a': return T_SITE_ADD;
@@ -213,8 +206,6 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 	printf("paso\n");
 
 	switch(t->type){
-		case T_TASK_SHOW:
-			task_show(t); break;
 		case T_SITE_LIST:
 			task_site_list(t,sites); break;
 		case T_SITE_SHOW:
