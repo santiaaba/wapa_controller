@@ -199,7 +199,7 @@ void worker_purge(T_worker *w){
 	 * Se eliminan tambien los archivos fisicos */
 
 	T_site *site;
-	char buffer_rx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
 
 	printf("PURGE: Eliminamos sitios logicos\n");
 	list_site_first(w->sites);
@@ -238,7 +238,7 @@ int worker_check(T_worker *w){
 	/* Verifica un worker. Actualiza el estado del mismo */
 	/* Retorna 1 si cambio de estado. 0 En caso contrario */
 
-	char buffer_rx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
 
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
@@ -281,8 +281,8 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 	/* Agrega fisica y logicamente un sitio a un worker.
 	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 
-	char buffer_rx[BUFFERSIZE];
-	char buffer_tx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
+	char buffer_tx[ROLE_BUFFER_SIZE];
 	T_alias *alias;
 
 	sprintf(buffer_tx,"A|%s|%lu|%s|%i|%s",site_get_name(s),site_get_id(s),site_get_dir(s),
@@ -298,7 +298,7 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 				alias = list_alias_get(site_get_alias(s));
 				printf("Procesando alias: %s\n",alias_get_name(alias));
 				if(strlen(alias_get_name(alias)) +
-				   strlen(buffer_tx) + 2 > BUFFERSIZE){
+				   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
 					// Buffer lleno. Enviamos lo que tenemos
 					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
 					buffer_tx[0] = '1';
@@ -332,8 +332,8 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 
 int worker_remove_site(T_worker *w, T_site *s){
 	/* Remueve fisica y logicamente un sitio de un worker */
-	char buffer_rx[BUFFERSIZE];
-        char buffer_tx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
+        char buffer_tx[ROLE_BUFFER_SIZE];
 
 	sprintf(buffer_tx,"d|%s",site_get_name(s));
 
@@ -348,7 +348,7 @@ int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
 
 	int cant_bytes;
 
-	cant_bytes = send(w->socket,command, BUFFERSIZE,0);
+	cant_bytes = send(w->socket,command, ROLE_BUFFER_SIZE,0);
 	printf("%s: send_recive %p - enviando(%i): %s\n",w->name,&(w->socket),cant_bytes,command);
 	if(cant_bytes <0){
 		printf("Send_recive: FALLO SEND!!!!\n");
@@ -358,7 +358,7 @@ int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
 		worker_connect(w);
 		return 0;
 	}
-	cant_bytes = recv(w->socket,buffer_rx,BUFFERSIZE,0);
+	cant_bytes = recv(w->socket,buffer_rx,ROLE_BUFFER_SIZE,0);
 	if(cant_bytes<0){
 		printf("Send_recive: FALLO RECV!!!!\n");
 		/* Fallo la conectividad contr el worker */
@@ -375,8 +375,8 @@ int worker_sync(T_worker *w, T_list_site *s){
 	/* Se conecta al worker, obtiene el listado
 	 * de sitios y actualiza las estructuras */
 
-	char buffer_rx[BUFFERSIZE];
-	char buffer_tx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
+	char buffer_tx[ROLE_BUFFER_SIZE];
 	int nextdata = 0;	//Fin de transmision
 	int pos = 2;		// Ya que en 2 se indica si hay mas datos luego
 	char aux[10];
@@ -415,7 +415,7 @@ int worker_sync(T_worker *w, T_list_site *s){
 
 int worker_reload(T_worker *w){
 	/* Le indica a un proxy que recargue su configuracion */
-	char buffer_tx[BUFFERSIZE];
+	char buffer_tx[ROLE_BUFFER_SIZE];
 
 	return(worker_send_recive(w,"R\0",buffer_tx));
 }
@@ -522,7 +522,7 @@ void proxy_reconfig(T_proxy *p, T_list_site *sites){
 	/* Reconfigura un proxy en base a la informacion
 	   de los sitios. Borra toda configuracion anterior.
 	   De momento un proxy ve todos los sitios y no unos en particular */
-	char buffer_rx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
 
 	if(proxy_send_recive(p,"D",buffer_rx)){
 		list_site_first(sites);
@@ -538,8 +538,8 @@ void proxy_reconfig(T_proxy *p, T_list_site *sites){
 int proxy_add_site(T_proxy *p, T_site *s){
 	/* Reconfigura el proxy para el sitio indicado */
 
-	char buffer_rx[BUFFERSIZE];
-	char buffer_tx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
+	char buffer_tx[ROLE_BUFFER_SIZE];
 	T_alias *alias;
 	T_worker *worker;
 	char aux[512];
@@ -573,7 +573,7 @@ int proxy_add_site(T_proxy *p, T_site *s){
 		printf("Adjuntando worker %s\n",worker_get_name(worker));
 
 		if(strlen(worker_get_name(worker)) +
-		   strlen(buffer_tx) + 2 > BUFFERSIZE){
+		   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
 			// Buffer lleno. Enviamos lo que tenemos
 			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
 			buffer_tx[0] = '1';
@@ -602,7 +602,7 @@ int proxy_add_site(T_proxy *p, T_site *s){
 	while(!list_alias_eol(site_get_alias(s))){
 		alias = list_alias_get(site_get_alias(s));
 		if(strlen(alias_get_name(alias)) +
-		   strlen(buffer_tx) + 2 > BUFFERSIZE){
+		   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
 			// Buffer lleno. Enviamos lo que tenemos
 			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
 			buffer_tx[0] = '1';
@@ -628,8 +628,8 @@ int proxy_add_site(T_proxy *p, T_site *s){
 
 int proxy_change_site(T_proxy *p, T_site *s){
 
-	char buffer_rx[BUFFERSIZE];
-	char buffer_tx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
+	char buffer_tx[ROLE_BUFFER_SIZE];
 
 	/* Eliminamos la configuracion anterior */
 	sprintf(buffer_tx,"d|%s",site_get_name(s));
@@ -641,7 +641,7 @@ int proxy_change_site(T_proxy *p, T_site *s){
 
 int proxy_reload(T_proxy *p){
 	/* Le indica a un proxy que recargue su configuracion */
-	char buffer_tx[BUFFERSIZE];
+	char buffer_tx[ROLE_BUFFER_SIZE];
 
 	return(proxy_send_recive(p,"R\0",buffer_tx));
 }
@@ -650,7 +650,7 @@ int proxy_check(T_proxy *p){
 	/* Verifica un proxy. Actualiza el estado del mismo */
 	/* Retorna 1 si cambio de estado. 0 En caso contrario */
 
-	char buffer_rx[BUFFERSIZE];
+	char buffer_rx[ROLE_BUFFER_SIZE];
 
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
@@ -696,7 +696,7 @@ int proxy_send_recive(T_proxy *p, char *command, char *buffer_rx){
 
 	int cant_bytes;
 
-	cant_bytes = send(p->socket,command, BUFFERSIZE,0);
+	cant_bytes = send(p->socket,command, ROLE_BUFFER_SIZE,0);
 	printf("%s: send_recive %p - enviando(%i): %s\n",p->name,&(p->socket),cant_bytes,command);
 	if(cant_bytes <0){
 		printf("Send_recive: FALLO SEND!!!!\n");
@@ -706,7 +706,7 @@ int proxy_send_recive(T_proxy *p, char *command, char *buffer_rx){
 		proxy_connect(p);
 		return 0;
 	}
-	cant_bytes = recv(p->socket,buffer_rx,BUFFERSIZE,0);
+	cant_bytes = recv(p->socket,buffer_rx,ROLE_BUFFER_SIZE,0);
 	if(cant_bytes<0){
 		printf("Send_recive: FALLO RECV!!!!\n");
 		/* Fallo la conectividad contr el proxy */

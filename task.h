@@ -61,7 +61,7 @@ typedef struct {
 	T_task_type type;		//tipo de accion a realizar
 	T_task_status status;		//estado del task
 	T_dictionary *data;		//datos necesarios para realizar la accion
-	char *result;			//resultado en formato json para retornar.
+	char *result;			//resultado a retornar
 	unsigned int result_size;	//datos para realizar la accion
 } T_task;
 
@@ -76,7 +76,7 @@ char *task_get_result(T_task *t);
 
 void task_show(T_task *t);
 
-void task_site_list(T_task *t, T_list_site *l);
+void task_site_list(T_task *t, T_db *db);
 void task_site_show(T_task *t, T_list_site *l);
 int task_site_add(T_task *t, T_list_site *l, T_db *db);
 int task_site_del(T_task *t, T_list_site *l, T_db *db);

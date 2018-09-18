@@ -2,6 +2,8 @@
 
 void server_add_task(T_server *s, T_task *t, char **message, unsigned int *message_size){
 
+	printf("Inicio: server_add_task\n");
+
 	pthread_mutex_lock(&(s->mutex_heap_task));
 		printf("ADD_TASK - %s\n",task_get_id(t));
 		heap_task_push(&(s->tasks_todo),t);
@@ -48,7 +50,7 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result, unsigned int 
 		task = bag_task_pop(&(s->tasks_done),taskid);
 		if(NULL == task){
 			*size=2;
-			*result=(char *)realloc(*result,*size * sizeof(char));
+			*result=(char *)realloc(*result,*size);
 			/* Verificamos si esta en la cola de tareas pendientes */
 			if(heap_task_exist(&(s->tasks_todo),(char *)taskid)){
 				/* Tarea existe y esta en espera */
@@ -58,10 +60,10 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result, unsigned int 
 				strcpy(*result,"0");
 			}
 		} else {
-			/* Tarea existe y ha finalizado */
 			*size = strlen(task_get_result(task));
-			*result = (char *)realloc(*result,(*size + 2) * sizeof(char));
+			*result = (char *)realloc(*result,(*size + 2));
 			sprintf(*result,"1%s",task_get_result(task));
+			printf("RESULTADO TASK:: %i - %s\n",*size,*result);
 			/* Eliminamos el task */
 			task_destroy(&task);
 		}
@@ -81,6 +83,7 @@ void buffer_to_dictionary(char *message, T_dictionary *data, int *pos){
 		parce_data(message,'|',pos,value);
 		dictionary_add(data,name,value);
 	}
+	printf("Fin buffer_to_dictionary\n");
 }
 
 int create_task(T_task **task, char *buffer_rx, char **message, unsigned int *message_size){
@@ -97,6 +100,7 @@ int create_task(T_task **task, char *buffer_rx, char **message, unsigned int *me
 	pos = 1;
 	buffer_to_dictionary(buffer_rx,data,&pos);
 	task_init(*task,task_c_to_type(buffer_rx[0]),data);
+	printf("find create_task %s\n",(*task)->id);
 	return 1;
 }
 
@@ -107,24 +111,29 @@ int recv_all_message(T_server *s, char **recv_message, int *recv_message_size){
 	int pos;
 	int fin='1';
 
-	*recv_message_size = 0;
+	*recv_message_size = -1;
 	while(fin == '1'){
-		printf("Esperamos comando nuevo\n");
+		printf("Esperamos comando nuevo o parte de el\n");
 		if(recv(s->fd_client,buffer,BUFFER_SIZE,0)<0){
 			return 0;
 		}
 		printf("El buffer es:%s\n",buffer);
-		pos = *recv_message_size;
+		pos = *recv_message_size + 1;
 		*recv_message_size += BUFFER_SIZE - HEAD_SIZE;
-		*recv_message=(char *)realloc(*recv_message, *recv_message_size * sizeof(char));
-		memcpy(recv_message[pos],&(buffer[HEAD_SIZE]),BUFFERSIZE - HEAD_SIZE);
-		fin = buffer[0];
+		printf("Nuevo dimencionamiento %i\n",*recv_message_size);
+		*recv_message=(char *)realloc(*recv_message, *recv_message_size);
+		printf("Copiamos en pos:%i cantidad:%i\n",pos,BUFFER_SIZE - HEAD_SIZE);
+		memcpy(*recv_message+pos,&(buffer[HEAD_SIZE]),BUFFER_SIZE - HEAD_SIZE);
+		printf("Mensaje hasta el momento:%s\n",*recv_message);
 		/* Enviamos al cliente confirmacion de resepcion de mas datos
  		 * solo si en el header venia un 1 */
-		if(fin == '1')
+		fin = buffer[0];
+		if(fin == '1'){
 			send(s->fd_client,"1\0", BUFFER_SIZE,0);
+		}
+		sleep(1);
 	}
-	printf("recv_all_message:-%s-\n",*recv_message);
+	printf("Mensaje completo:-%s-\n",*recv_message);
 	return 1;
 }
 
@@ -138,19 +147,25 @@ int send_all_message(T_server *s, char *message, int message_size){
 
 	p = message;
 	c = 0;
-	printf("Enviamos la respuesta al Core\n");
+	printf("Enviamos al Core: %i - %s\n",message_size,message);
+	message_size ++;	 //contabilizamos el '\0' del final del string
 	while(c < message_size){
 		if((message_size - c + HEAD_SIZE) < BUFFER_SIZE){
-			memcpy(buffer_tx + HEAD_SIZE,p,message_size - c);
+			printf("Entra en una transmision %i \n",message_size - c);
+			memcpy(buffer_tx + HEAD_SIZE,p,message_size - c - HEAD_SIZE);
 			buffer_tx[0] = '0';
 			c += message_size - c;
 		} else{
-			memcpy(buffer_tx + HEAD_SIZE,p,BUFFER_SIZE - HEAD_SIZE);
+			printf("Va a requerir una transmision mas para enviar\n");
+			NO FUNCIONAAAAA AL LISTAR SITIOS!!!!
+			printf("Copiando parte de %s -> %s\n",message, p);
+			memcpy(buffer_tx + HEAD_SIZE,p, BUFFER_SIZE - HEAD_SIZE);
 			buffer_tx[0] = '1';
-			c += BUFFER_SIZE - HEAD_SIZE;
-			p += c;
+			c += (BUFFER_SIZE - HEAD_SIZE);
+			printf("valor de c: %i\n",c);
+			p += c * sizeof(char);
 		}
-		printf("send_all_message-enviamos %s\n",buffer_tx);
+		printf("Enviando buffer -%s-\n",buffer_tx);
 		if(!send(s->fd_client,buffer_tx,BUFFER_SIZE,0))
 			return 0;
 		/* Esperamos recibir confirmacion para enviar mas datos
@@ -158,7 +173,7 @@ int send_all_message(T_server *s, char *message, int message_size){
 		if(buffer_tx[0] == '1')
 			if(!recv(s->fd_client,buffer_rx,BUFFER_SIZE,0)>0)
 				return 0;
-		printf("send_all_message-recibimos %s\n",buffer_rx);
+		printf("Recibimos -%s-\n",buffer_rx);
 		if(buffer_rx[0] == '0')
 			return 0;
 	}
@@ -209,6 +224,7 @@ void *server_listen(void *param){
 				pos=1;
 				parce_data(recv_message,'|',&pos,taskid);
 				server_get_task(s,(T_taskid *)taskid,&send_message,&send_message_size);
+				printf("ENVIAMOS RESULTADO TASK -%s-\n",send_message);
 			} else {
 				/* Creamos el task  */
 				if(create_task(&task,recv_message,&send_message,&send_message_size)){

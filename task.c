@@ -7,7 +7,6 @@ void random_task_id(T_taskid value){
 	
 	for(j=0;j<TASKID_SIZE-1;j++){
 		i = rand() % 62;
-		//printf("i=%i\n",i);
 		value[j] = string[i];
 	}
 	value[TASKID_SIZE] = '\0';
@@ -22,6 +21,7 @@ void random_token(T_tasktoken value){
 		i = rand() % 62;
 		value[j] = string[i];
 	}
+	value[TOKEN_SIZE] = '\0';
 }
 
 void random_dir(char *dir){
@@ -45,12 +45,13 @@ void random_dir(char *dir){
 ******************************/
 void task_init(T_task *t, T_task_type type, T_dictionary *data){
 	random_task_id(t->id);
-	random_token(t->token);
+	printf("TASK_INIT: ID: %s\n",t->id);
+	//random_token(t->token);
 	t->type = type;
 	t->data = data;
-	t->result = (char *)malloc(TASKRESULT_SIZE);
-	t->result_size = TASKRESULT_SIZE;
-	strcpy(t->result,"");
+	t->result = NULL;
+	t->result_size = 0;
+	printf("TASK_INIT: ID: %s\n",t->id);
 }
 
 void task_destroy(T_task **t){
@@ -66,8 +67,16 @@ void task_destroy(T_task **t){
 	free(*t);
 }
 
-void task_site_list(T_task *t, T_list_site *l){
-	json_sites(&(t->result),&(t->result_size),l);
+void task_site_list(T_task *t, T_db *db){
+	/* Lista sitios de una suscripcion dada */
+	char *susc_id;
+
+	printf("Entramos task_site_list\n");
+
+	susc_id = dictionary_get(t->data,"susc_id");
+	printf("TASK_SITE_LIST: susc_id:-%s-\n",susc_id);
+	db_site_list(db, &(t->result),&(t->result_size),susc_id);
+	printf("DB_TASK_RESULT:-%s-\n",t->result);
 }
 
 void task_site_show(T_task *t, T_list_site *l){
@@ -80,6 +89,7 @@ void task_site_show(T_task *t, T_list_site *l){
 }
 
 char *task_get_result(T_task *t){
+	printf("TASK_RESULT: %s\n",t->result);
 	return t->result;
 }
 
@@ -207,7 +217,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 
 	switch(t->type){
 		case T_SITE_LIST:
-			task_site_list(t,sites); break;
+			task_site_list(t,db); break;
 		case T_SITE_SHOW:
 			task_site_show(t,sites); break;
 		case T_SITE_ADD:

@@ -10,7 +10,7 @@
 #ifndef STRUCT_H
 #define STRUCT_H
 
-#define BUFFERSIZE 1024
+#define ROLE_BUFFER_SIZE 1024
 #define TIMEONLINE 20	//tiempo que debe estar en preparado para pasar a online. En segundos
 
 typedef enum { S_ONLINE, S_OFFLINE} T_site_status;

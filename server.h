@@ -9,7 +9,7 @@
 #define PORT		8888
 #define MAXNAMESIZE     20
 #define MAXANSWERSIZE   512
-#define BUFFER_SIZE	1024
+#define BUFFER_SIZE	25
 #define HEAD_SIZE	1
 #define BACKLOG 	1 /* El número de conexiones permitidas */
 
