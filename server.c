@@ -1,14 +1,23 @@
 #include "server.h"
 
-void server_add_task(T_server *s, T_task *t, char **message, unsigned int *message_size){
+void int_to_4bytes(uint32_t *i, char *_4bytes){
+	memcpy(_4bytes,i,4);
+}
 
-	printf("Inicio: server_add_task\n");
+void _4bytes_to_int(char *_4bytes, uint32_t *i){
+	memcpy(i,_4bytes,4);
+}
+
+/************************
+ *      CLOUD	        *
+ ************************/
+
+void server_add_task(T_server *s, T_task *t, char **message, uint32_t *message_size){
 
 	pthread_mutex_lock(&(s->mutex_heap_task));
-		printf("ADD_TASK - %s\n",task_get_id(t));
 		heap_task_push(&(s->tasks_todo),t);
-		*message=(char *)realloc(*message,(TASKID_SIZE + 2)*sizeof(char));
-		*message_size = TASKID_SIZE + 2;
+		*message=(char *)realloc(*message,TASKID_SIZE + 2);
+		*message_size = TASKID_SIZE + 2;	//sumamos 2 para incluir el 1 y el \0
 		sprintf(*message,"1%s",task_get_id(t));
 	pthread_mutex_unlock(&(s->mutex_heap_task));
 }
@@ -17,19 +26,16 @@ void *server_do_task(void *param){
 	T_task *task;
 	T_server *s= (T_server *)param;
 
-	printf("EJECUTAMOS un TASK!!!!\n");
 	while(1){
-		sleep(3);
+		sleep(5);
 		pthread_mutex_lock(&(s->mutex_heap_task));
 			task = heap_task_pop(&(s->tasks_todo));
-			printf("DO_TASK - %s\n",task_get_id(task));
 		pthread_mutex_unlock(&(s->mutex_heap_task));
 		if(task != NULL){
 			pthread_mutex_lock(&(s->mutex_lists));
 				task_run(task,s->sites,s->workers,s->proxys,s->db);
 			pthread_mutex_unlock(&(s->mutex_lists));
 			pthread_mutex_lock(&(s->mutex_bag_task));
-				printf("BAG_TASK - %s\n",task_get_id(task));
 				bag_task_add(&(s->tasks_done),task);
 				bag_task_print(&(s->tasks_done));
 			pthread_mutex_unlock(&(s->mutex_bag_task));
@@ -37,7 +43,7 @@ void *server_do_task(void *param){
 	}
 }
 
-void server_get_task(T_server *s, T_taskid *taskid, char **result, unsigned int *size){
+void server_get_task(T_server *s, T_taskid *taskid, char **result_message, uint32_t *size_message){
 	/* result es un puntero a NULL */
 	T_task *task;
 	unsigned int total_size;
@@ -49,21 +55,22 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result, unsigned int 
 		bag_task_print(&(s->tasks_done));
 		task = bag_task_pop(&(s->tasks_done),taskid);
 		if(NULL == task){
-			*size=2;
-			*result=(char *)realloc(*result,*size);
+			*size_message=2;
+			*result_message=(char *)realloc(*result_message,*size_message);
 			/* Verificamos si esta en la cola de tareas pendientes */
 			if(heap_task_exist(&(s->tasks_todo),(char *)taskid)){
 				/* Tarea existe y esta en espera */
-				strcpy(*result,"2");
+				strcpy(*result_message,"2");
 			} else {
 				/* Tarea no existe */
-				strcpy(*result,"0");
+				strcpy(*result_message,"0");
 			}
 		} else {
-			*size = strlen(task_get_result(task));
-			*result = (char *)realloc(*result,(*size + 2));
-			sprintf(*result,"1%s",task_get_result(task));
-			printf("RESULTADO TASK:: %i - %s\n",*size,*result);
+			// A size_message le sumamos dos bytes. Uno para el "1" y otro para el \0
+			*size_message = strlen(task_get_result(task)) + 2;
+			*result_message=(char *)realloc(*result_message,((*size_message)));
+			sprintf(*result_message,"1%s",task_get_result(task));
+			printf("RESULTADO TASK:: %i - %s\n",*size_message,*result_message);
 			/* Eliminamos el task */
 			task_destroy(&task);
 		}
@@ -76,17 +83,15 @@ void buffer_to_dictionary(char *message, T_dictionary *data, int *pos){
 	char name[100];
 	char value[100];
 
-	printf("buffer_to_dictionary-%i-%s-\n",*pos,message);
 	largo = strlen(message);
 	while(*pos<largo){
 		parce_data(message,'|',pos,name);
 		parce_data(message,'|',pos,value);
 		dictionary_add(data,name,value);
 	}
-	printf("Fin buffer_to_dictionary\n");
 }
 
-int create_task(T_task **task, char *buffer_rx, char **message, unsigned int *message_size){
+int create_task(T_task **task, char *buffer_rx){
 	/* Crea una tarea. Si hay un error lo especifica en
  	   la variable message */
 	char value[100];
@@ -100,91 +105,73 @@ int create_task(T_task **task, char *buffer_rx, char **message, unsigned int *me
 	pos = 1;
 	buffer_to_dictionary(buffer_rx,data,&pos);
 	task_init(*task,task_c_to_type(buffer_rx[0]),data);
-	printf("find create_task %s\n",(*task)->id);
 	return 1;
 }
 
-int recv_all_message(T_server *s, char **recv_message, int *recv_message_size){
+int recv_all_message(T_server *s, char **rcv_message, uint32_t *rcv_message_size){
 	/* Coordina la recepcion de mensajes grandes del cliente */
 	/* El encabezado es de 1 char */
 	char buffer[BUFFER_SIZE];
-	int pos;
-	int fin='1';
+	char printB[BUFFER_SIZE+1];
+	int first_message=1;
+	uint32_t parce_size;
+	int c=0;	// Cantidad de bytes recibidos
 
-	*recv_message_size = -1;
-	while(fin == '1'){
-		printf("Esperamos comando nuevo o parte de el\n");
-		if(recv(s->fd_client,buffer,BUFFER_SIZE,0)<0){
+	// Al menos una vez vamos a ingresar
+	*rcv_message_size=0;
+	do{
+		if(recv(s->fd_client,buffer,BUFFER_SIZE,0)<=0){
 			return 0;
 		}
-		printf("El buffer es:%s\n",buffer);
-		pos = *recv_message_size + 1;
-		*recv_message_size += BUFFER_SIZE - HEAD_SIZE;
-		printf("Nuevo dimencionamiento %i\n",*recv_message_size);
-		*recv_message=(char *)realloc(*recv_message, *recv_message_size);
-		printf("Copiamos en pos:%i cantidad:%i\n",pos,BUFFER_SIZE - HEAD_SIZE);
-		memcpy(*recv_message+pos,&(buffer[HEAD_SIZE]),BUFFER_SIZE - HEAD_SIZE);
-		printf("Mensaje hasta el momento:%s\n",*recv_message);
-		/* Enviamos al cliente confirmacion de resepcion de mas datos
- 		 * solo si en el header venia un 1 */
-		fin = buffer[0];
-		if(fin == '1'){
-			send(s->fd_client,"1\0", BUFFER_SIZE,0);
+		if(first_message){
+			first_message=0;
+			_4bytes_to_int(buffer,rcv_message_size);
+			*rcv_message=(char *)realloc(*rcv_message,*rcv_message_size);
 		}
-		sleep(1);
-	}
-	printf("Mensaje completo:-%s-\n",*recv_message);
+		_4bytes_to_int(&(buffer[4]),&parce_size);
+		memcpy(*rcv_message+c,&(buffer[HEADER_SIZE]),parce_size);
+		c += parce_size;
+	} while(c < *rcv_message_size);
+	printf("RECV Mesanje: %s\n",*rcv_message);
 	return 1;
 }
 
-int send_all_message(T_server *s, char *message, int message_size){
+int send_all_message(T_server *s, char *send_message, uint32_t send_message_size){
 	/* Coordina el envio de los datos aun cuando se necesita
 	 * mas de una transmision */
-	char buffer_tx[BUFFER_SIZE];
-	char buffer_rx[BUFFER_SIZE];
-	char *p;
-	int c;
+	char buffer[BUFFER_SIZE];
+	char printB[BUFFER_SIZE+1];
+	int c=0;	//Cantidad byes enviados
+	uint32_t parce_size;
 
-	p = message;
-	c = 0;
-	printf("Enviamos al Core: %i - %s\n",message_size,message);
-	message_size ++;	 //contabilizamos el '\0' del final del string
-	while(c < message_size){
-		if((message_size - c + HEAD_SIZE) < BUFFER_SIZE){
-			printf("Entra en una transmision %i \n",message_size - c);
-			memcpy(buffer_tx + HEAD_SIZE,p,message_size - c - HEAD_SIZE);
-			buffer_tx[0] = '0';
-			c += message_size - c;
-		} else{
-			printf("Va a requerir una transmision mas para enviar\n");
-			NO FUNCIONAAAAA AL LISTAR SITIOS!!!!
-			printf("Copiando parte de %s -> %s\n",message, p);
-			memcpy(buffer_tx + HEAD_SIZE,p, BUFFER_SIZE - HEAD_SIZE);
-			buffer_tx[0] = '1';
-			c += (BUFFER_SIZE - HEAD_SIZE);
-			printf("valor de c: %i\n",c);
-			p += c * sizeof(char);
+	printf("Enviaremos al CORE: %s\n",send_message);
+	/* Los 4 primeros bytes del header es el tamano total del mensaje */
+        int_to_4bytes(&send_message_size,buffer);
+
+	while(c < send_message_size){
+		if(send_message_size - c + HEADER_SIZE < BUFFER_SIZE){
+			/* Entra en un solo buffer */
+			parce_size = send_message_size - c ;
+		} else {
+			/* No entra todo en el buffer */
+			parce_size = BUFFER_SIZE - HEADER_SIZE;
 		}
-		printf("Enviando buffer -%s-\n",buffer_tx);
-		if(!send(s->fd_client,buffer_tx,BUFFER_SIZE,0))
+		int_to_4bytes(&parce_size,&(buffer[4]));
+		memcpy(buffer + HEADER_SIZE,send_message + c,parce_size);
+		c += parce_size;
+		//printf("Enviamos %s\n",buffer[HEADER_SIZE]);
+		if(send(s->fd_client,buffer,BUFFER_SIZE,0)<0){
+			printf("ERROR a manejar\n");
 			return 0;
-		/* Esperamos recibir confirmacion para enviar mas datos
- 		 * solo si hemos enviado un 1 en el header */
-		if(buffer_tx[0] == '1')
-			if(!recv(s->fd_client,buffer_rx,BUFFER_SIZE,0)>0)
-				return 0;
-		printf("Recibimos -%s-\n",buffer_rx);
-		if(buffer_rx[0] == '0')
-			return 0;
+		}
 	}
-	return 1;
 }
 
 void *server_listen(void *param){
 	char *recv_message = NULL;
 	char *send_message = NULL;
-	int recv_message_size = 0;
-	int send_message_size = 0;
+	uint32_t recv_message_size = 0;
+	uint32_t send_message_size = 0;
 	int pos;
 	char taskid[20];
 	T_task *task;
@@ -209,6 +196,8 @@ void *server_listen(void *param){
 	}
 	s->sin_size=sizeof(struct sockaddr_in);
 
+	recv_message = (char *)malloc(10);
+	send_message = (char *)malloc(10);
 	while(1){
 		printf("Esperando conneccion desde el cliente()\n"); //Debemos mantener viva la conexion
 		if ((s->fd_client = accept(s->fd_server,(struct sockaddr *)&(s->client),&(s->sin_size)))<0) {
@@ -218,31 +207,31 @@ void *server_listen(void *param){
 
 		// Aguardamos continuamente que el cliente envie un comando
 		while(recv_all_message(s,&recv_message,&recv_message_size)){
+			//printf("PROBANDO ALLOCAMIENTO LUEGO DE RECIBIR UN MENSAJE\n");
+			//send_message=(char *)realloc(send_message,100);
 			printf("Recibimos -%s-\n",recv_message);
 			if(recv_message[0] == 't'){
 				/* nos solicitan el estado de un task */
 				pos=1;
 				parce_data(recv_message,'|',&pos,taskid);
 				server_get_task(s,(T_taskid *)taskid,&send_message,&send_message_size);
-				printf("ENVIAMOS RESULTADO TASK -%s-\n",send_message);
+				printf("ENVIAMOS RESULTADO TASK %i:%i -%s-\n",send_message_size, strlen(send_message), send_message);
 			} else {
 				/* Creamos el task  */
-				if(create_task(&task,recv_message,&send_message,&send_message_size)){
+				if(create_task(&task,recv_message)){
 					server_add_task(s,task,&send_message,&send_message_size);
+					//printf("PROBANDO ALLOCAMIENTO LUEGO DE CREAR EL TASK\n");
+					//send_message=(char *)realloc(send_message,100);
 				}
 			}
-			printf("Informamos al CORE\n");
 			send_all_message(s,send_message,send_message_size);
+			//printf("PROBANDO ALLOCAMIENTO LUEGO  DE ENVIAR EL MENSAJE\n");
+			//send_message=(char *)realloc(send_message,100);
 
-			/* Quizas liberar la memoria nos ea necesario 
- 
+			/* 
 			printf("liberamos memoria\n");
   			free(recv_message);
 			free(send_message);
-			recv_message=NULL;
-			send_message=NULL;
-			recv_message_size=0;
-			send_message_size=0;
 			*/
 		}
 		close(s->fd_client);

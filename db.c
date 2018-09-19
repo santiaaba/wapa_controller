@@ -164,3 +164,39 @@ void db_worker_start(T_db *db, int id){
 	printf("QEURY : %s\n",query);
 	mysql_query(db->con,query);
 }
+
+void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
+	/* Retorna el lsitado con el siguiente formato
+	id|<id>|name|<name>|status|<status>|...
+
+	Lo retornamos en formato json
+ 	*/
+	const int max_c_site=300; //Los datos de un solo sitio no deben superar este valor
+	
+	char query[200];
+	char aux[max_c_site];
+	int real_size;
+	MYSQL_RES *result;
+        MYSQL_ROW row;
+
+        sprintf(query,"select id,name,status from web_site where susc_id =%s",susc_id);
+	printf("DB_SITE_LIST: %s\n",query);
+	mysql_query(db->con,query);
+	result = mysql_store_result(db->con);
+
+	*data=(char *)realloc(*data,max_c_site);
+	real_size = max_c_site;
+	strcpy(*data,"[");
+	while(row = mysql_fetch_row(result)){
+		printf("Agregando\n");
+		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",row[0],row[1],row[2]);
+		if(strlen(*data)+strlen(aux)+1 < real_size){
+			real_size =+ max_c_site;
+			*data=(char *)realloc(*data,real_size);
+		}
+		strcat(*data,aux);
+	}
+	(*data)[strlen(*data) - 1] = ']';
+	printf("Resultado:-%s-\n",*data);
+	*data_size = real_size;
+}

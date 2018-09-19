@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <microhttpd.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,7 +11,7 @@
 #define MAXNAMESIZE     20
 #define MAXANSWERSIZE   512
 #define BUFFER_SIZE	25
-#define HEAD_SIZE	1
+#define HEADER_SIZE	8
 #define BACKLOG 	1 /* El número de conexiones permitidas */
 
 typedef struct t_r_server {

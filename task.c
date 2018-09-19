@@ -71,12 +71,10 @@ void task_site_list(T_task *t, T_db *db){
 	/* Lista sitios de una suscripcion dada */
 	char *susc_id;
 
-	printf("Entramos task_site_list\n");
-
 	susc_id = dictionary_get(t->data,"susc_id");
-	printf("TASK_SITE_LIST: susc_id:-%s-\n",susc_id);
 	db_site_list(db, &(t->result),&(t->result_size),susc_id);
-	printf("DB_TASK_RESULT:-%s-\n",t->result);
+	/* Falta agregar una lista de los workers donde esta
+ 	   cada site */
 }
 
 void task_site_show(T_task *t, T_list_site *l){
@@ -89,7 +87,6 @@ void task_site_show(T_task *t, T_list_site *l){
 }
 
 char *task_get_result(T_task *t){
-	printf("TASK_RESULT: %s\n",t->result);
 	return t->result;
 }
 
@@ -386,8 +383,10 @@ T_task *bag_task_pop(T_bag_task *b, T_taskid *id){
 		printf("Comparamos -%s- con -%s-\n",id,task_get_id(b->actual->data));
 		exist = (strcmp(task_get_id(b->actual->data),(char *)id)==0);
 		if((!exist && (b->actual != NULL))){
+			printf("	Avanzamos. No son iguales\n");
 			b->actual = b->actual->next;
 		}
+		sleep(5);
 	}
 	if(exist)
 		taux = bag_site_remove(b);
