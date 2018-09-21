@@ -414,7 +414,6 @@ void main(){
 	/* Comenzamos el loop del controller */
 	while(1){
 		sleep(5);
-		continue;	// Probando server. Eliminar luego //
 
 		changed = 0;
 		server_lock(&server);

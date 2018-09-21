@@ -27,7 +27,7 @@ void json_site(char **data, int *size, T_site *site){
  	 * Realoca la memoria de data y retorna el tamano en
 	 * size, si es que no entran los datos */
 
-	T_alias *alias;
+	T_s_e *alias;
 	T_worker *worker;
 	int id;
 	char *name;
@@ -58,21 +58,21 @@ void json_site(char **data, int *size, T_site *site){
 	strcat(*data,"\",\"urls\":[ ");
 
 	/* Poblamos con las urls */
-	list_alias_first(site_get_alias(site));
-	while(!list_alias_eol(site_get_alias(site))){
-		alias = list_alias_get(site_get_alias(site));
-		name = alias_get_name(alias);
+	list_s_e_first(site_get_alias(site));
+	while(!list_s_e_eol(site_get_alias(site))){
+		alias = list_s_e_get(site_get_alias(site));
+		name = s_e_get_name(alias);
 		if(*size < (strlen(name) + 150)){
 			*size = *size + 1000;
 			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
 		strcat(*data,"{\"id\":\"");
-		sprintf(aux,"%lu",alias_get_id(alias));
+		sprintf(aux,"%lu",s_e_get_id(alias));
 		strcat(*data,aux);
 		strcat(*data,"\",\"url\":\"");
-		strcat(*data,alias_get_name(alias));
+		strcat(*data,s_e_get_name(alias));
 		strcat(*data,"\"},");
-		list_alias_next(site_get_alias(site));
+		list_s_e_next(site_get_alias(site));
 	}
 	(*data)[strlen(*data)-1] = ']';
 	strcat(*data,",\"workers\":[ ");

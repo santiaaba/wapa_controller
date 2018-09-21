@@ -1,16 +1,19 @@
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "string_element.h"
 #include "parce.h"
 
 #ifndef STRUCT_H
 #define STRUCT_H
 
-#define ROLE_BUFFER_SIZE 1024
+#define ROLE_BUFFER_SIZE 25
+#define ROLE_HEADER_SIZE 8
 #define TIMEONLINE 20	//tiempo que debe estar en preparado para pasar a online. En segundos
 
 typedef enum { S_ONLINE, S_OFFLINE} T_site_status;
@@ -20,25 +23,11 @@ typedef enum { P_ONLINE, P_OFFLINE, P_PREPARED, P_BROKEN, P_UNKNOWN} T_proxy_sta
 typedef struct list_worker T_list_worker;
 typedef struct list_site T_list_site;
 typedef struct list_proxy T_list_proxy;
-typedef struct list_alias T_list_alias;
 
 /*****************************
           Varios
 ******************************/
 void itowstatus(T_worker_status i, char *name);
-
-/*****************************
- * 	Alias
- *****************************/
-typedef struct {
-	char *name;
-	unsigned int id;
-} T_alias;
-
-void alias_init(T_alias *a, unsigned int id, char *name);
-char *alias_get_name(T_alias *a);
-unsigned int alias_get_id(T_alias *a);
-void alias_set_name(T_alias *a);
 
 /*****************************
  	Sitio
@@ -49,7 +38,8 @@ typedef struct {
 	char name[100];
 	unsigned int size;   //4 bytes
 	char dir[5];   //Directorio
-	T_list_alias *alias;
+	T_list_s_e *alias;
+	T_list_s_e *indexes;
 	T_site_status status;
 	T_list_worker *workers;
 } T_site;
@@ -62,7 +52,8 @@ char *site_get_name(T_site *s);
 char *site_get_dir(T_site *s);
 unsigned int site_get_size(T_site *s);
 unsigned int site_get_real_size(T_site *s);
-T_list_alias *site_get_alias(T_site *s);
+T_list_s_e *site_get_alias(T_site *s);
+T_list_s_e *site_get_indexes(T_site *s);
 T_site_status site_get_status(T_site *s);
 
 /* Retorna la lista de workers */
@@ -111,7 +102,8 @@ int worker_remove_site(T_worker *w, T_site *s);
 /* Elimina logicamente los sitios de un worker.*/
 void worker_purge(T_worker *w);
 
-int worker_send_recive(T_worker *w, char *command, char *buffer_recv);
+int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_size,
+                        char **rcv_message, uint32_t *rcv_message_size);
 int worker_sync(T_worker *w, T_list_site *s);
 T_worker_status worker_get_status(T_worker *w);
 
@@ -294,30 +286,5 @@ unsigned int list_proxy_size(T_list_proxy *l);
 int list_proxy_eol(T_list_proxy *l);
 void list_proxy_remove(T_list_proxy *l);
 void list_proxy_destroy(T_list_proxy *l);
-
-/*****************************
- *         Lista de alias
-*******************************/
-typedef struct a_node {
-        T_alias *data;
-        struct a_node *next;
-} list_a_node;
-
-struct list_alias {
-        unsigned int size;
-        list_a_node *first;
-        list_a_node *last;
-        list_a_node *actual;
-	pthread_mutex_t lock;
-};
-
-void list_alias_init(T_list_alias *l);
-void list_alias_add(T_list_alias *l, T_alias *a);
-void list_alias_first(T_list_alias *l);
-void list_alias_next(T_list_alias *l);
-T_alias *list_alias_get(T_list_alias *l);
-unsigned int list_alias_size(T_list_alias *l);
-int list_alias_eol(T_list_alias *l);
-T_alias *list_alias_remove(T_list_alias *l);
 
 #endif

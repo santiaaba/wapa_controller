@@ -17,6 +17,6 @@ void parce_data(char *buffer, char sep, int *i, char *value){
 	}
 	value[j]='\0';
 	/* Adelantamos la i una posicion ya que se
-	 * encuentra parada en el caracter "|" posiblemente */
+	 * encuentra parada en el caracter sep posiblemente */
 	(*i)++;
 }

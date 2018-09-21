@@ -1,5 +1,4 @@
 #include "structs.h"
-#include "string.h"
 
 /*****************************
 	 Varios 
@@ -16,32 +15,16 @@ void itowstatus(T_worker_status i, char *name){
 }
 
 /*****************************
-	  Alias 
-******************************/
-void alias_init(T_alias *a, unsigned int id, char *name){
-	a->id = id;
-	a->name = malloc(strlen(name));
-	strcpy(a->name,name);
-	printf("Nombre copiado %s = %s\n",name,a->name);
-}
-
-char *alias_get_name(T_alias *a){
-	return a->name;
-}
-
-unsigned int alias_get_id(T_alias *a){
-	return a->id;
-}
-
-/*****************************
 	 Sitios
 ******************************/
 void site_init(T_site *s, char *name, unsigned int id, char *dir,
 	       unsigned int version, unsigned int size){
 	s->workers = (T_list_worker*)malloc(sizeof(T_list_worker));
-	s->alias = (T_list_alias*)malloc(sizeof(T_list_alias));
+	s->alias = (T_list_s_e*)malloc(sizeof(T_list_s_e));
+	s->indexes = (T_list_s_e*)malloc(sizeof(T_list_s_e));
 	list_worker_init(s->workers);
-	list_alias_init(s->alias);
+	list_s_e_init(s->alias);
+	list_s_e_init(s->indexes);
 	strcpy(s->name,name);
 	strcpy(s->dir,dir);
 	s->status = W_ONLINE;
@@ -82,8 +65,12 @@ unsigned int site_get_real_size(T_site *s){
 	return list_worker_size(s->workers);
 }
 
-T_list_alias *site_get_alias(T_site *s){
+T_list_s_e *site_get_alias(T_site *s){
 	return s->alias;
+}
+
+T_list_s_e *site_get_indexes(T_site *s){
+	return s->indexes;
 }
 
 T_site_status site_get_status(T_site *s){
@@ -199,27 +186,29 @@ void worker_purge(T_worker *w){
 	 * Se eliminan tambien los archivos fisicos */
 
 	T_site *site;
-	char buffer_rx[ROLE_BUFFER_SIZE];
+	char send_message[2];
+	char *rcv_message = NULL;
+	uint32_t rcv_message_size=0;
 
-	printf("PURGE: Eliminamos sitios logicos\n");
-	list_site_first(w->sites);
-	printf("PURGE: Entrando while\n");
-	printf("El worker %s posee %i sitios\n",worker_get_name(w),list_site_size(w->sites));
-	while(!list_site_eol(w->sites)){
-		printf("Obteniendo sitio\n");
-		site = list_site_get(w->sites);
-		printf("PURGE: Removiendo worker del sitio\n");
-		list_worker_remove_id(site_get_workers(site),worker_get_id(w));
-		printf("PURGE: proximo sitio\n");
-		list_site_next(w->sites);
-	}
-	printf("PURGE: borrando lista de sitios del worker\n");
-	list_site_erase(w->sites);
-
-	/* Una vez eliminados todos los sitios, procedemos
- 	 * a pedirle al worker fisico que elimine los archivos */
+	sprintf(send_message,"P");
 	printf("PURGE: Eliminamos sitios fisicos\n");
-	worker_send_recive(w,"P",buffer_rx);
+	if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
+		list_site_first(w->sites);
+		printf("PURGE: Eliminamos sitios logicos\n");
+		printf("PURGE: Entrando while\n");
+		printf("El worker %s posee %i sitios\n",worker_get_name(w),list_site_size(w->sites));
+		while(!list_site_eol(w->sites)){
+			printf("Obteniendo sitio\n");
+			site = list_site_get(w->sites);
+			printf("PURGE: Removiendo worker del sitio\n");
+			list_worker_remove_id(site_get_workers(site),worker_get_id(w));
+			printf("PURGE: proximo sitio\n");
+			list_site_next(w->sites);
+		}
+		printf("PURGE: borrando lista de sitios del worker\n");
+		list_site_erase(w->sites);
+	}
+	free(rcv_message);
 }
 
 void worker_set_statistics(T_worker *w, char *buffer_rx){
@@ -238,18 +227,21 @@ int worker_check(T_worker *w){
 	/* Verifica un worker. Actualiza el estado del mismo */
 	/* Retorna 1 si cambio de estado. 0 En caso contrario */
 
-	char buffer_rx[ROLE_BUFFER_SIZE];
+	char send_message[2];
+	char *rcv_message = NULL;
+	uint32_t rcv_message_size;
 
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
 	
 	printf("Tiempo entre estados %lu - %lu = %lu\n",(unsigned long)time(0),(unsigned long)w->time_change_status,(unsigned long)time(0) - (unsigned long)w->time_change_status);
 	if(w->status != W_OFFLINE){
-		if(worker_send_recive(w,"C",buffer_rx)){
-			printf("CHECK: -%s-\n",buffer_rx);
+		sprintf(send_message,"C");
+		if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
+			printf("CHECK: -%s-\n",rcv_message);
 			/* Actualizamos las estadisticas */
-			worker_set_statistics(w, buffer_rx);
-			if(buffer_rx[0] == '1'){
+			worker_set_statistics(w, rcv_message);
+			if(rcv_message[0] == '1'){
 				if(w->status == W_BROKEN || w->status == W_UNKNOWN){
 					/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
 					worker_change_status(w,W_PREPARED);
@@ -269,6 +261,7 @@ int worker_check(T_worker *w){
 			printf("worker %s NO RESPONDE!\n",worker_get_name(w));
 		}
 	}
+	free(rcv_message);
 	if (w->is_changed){
 		w->is_changed = 0;
 		return 1;
@@ -281,93 +274,146 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 	/* Agrega fisica y logicamente un sitio a un worker.
 	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 
-	char buffer_rx[ROLE_BUFFER_SIZE];
-	char buffer_tx[ROLE_BUFFER_SIZE];
-	T_alias *alias;
+	char aux[100];
+	char *send_message = NULL;
+	uint32_t send_message_size;
+	char *rcv_message = NULL;
+	uint32_t rcv_message_size;
+	int ok=1;
 
-	sprintf(buffer_tx,"A|%s|%lu|%s|%i|%s",site_get_name(s),site_get_id(s),site_get_dir(s),
-	site_get_version(s),default_domain);
+	T_s_e *aux_s_e;
+
+	send_message_size = 100;
+	send_message = (char *)malloc(send_message_size);
+	sprintf(send_message,"A|%s|%lu|%s|%i|%s|",site_get_id(s),site_get_name(s),site_get_dir(s),
+	site_get_version(s));
+
+	// Armar los alias
+	list_s_e_first(site_get_alias(s));
+	while(!list_s_e_eol(site_get_alias(s))){
+		aux_s_e = list_s_e_get(site_get_alias(s));
+		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
+		if(send_message_size < strlen(send_message) + strlen(aux) + 2){
+			send_message_size += 100;
+			send_message = (char *)realloc(send_message,send_message_size);
+			strcat(send_message,aux);
+		}
+	}
+	// Armar los indices
+	list_s_e_first(site_get_indexes(s));
+	while(!list_s_e_eol(site_get_indexes(s))){
+		aux_s_e = list_s_e_get(site_get_indexes(s));
+		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
+		if(send_message_size < strlen(send_message) + strlen(aux) + 2){
+			send_message_size += 100;
+			send_message = (char *)realloc(send_message,send_message_size);
+			strcat(send_message,aux);
+		}
+	}
+
+	/* Normalizamos el send_message */
+	send_message_size = strlen(send_message)+1;
+	send_message = (char *)realloc(send_message,send_message_size);
 	
-	if(worker_send_recive(w,buffer_tx,buffer_rx)){
-		if(buffer_rx[0] == '1'){
-			printf("COmenzamos con los alias!!!\n");
-			/* Enviamos los alias. Puede que requieran varios envios */
-			list_alias_first(site_get_alias(s));
-			strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar
-			while(!list_alias_eol(site_get_alias(s))){
-				alias = list_alias_get(site_get_alias(s));
-				printf("Procesando alias: %s\n",alias_get_name(alias));
-				if(strlen(alias_get_name(alias)) +
-				   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
-					// Buffer lleno. Enviamos lo que tenemos
-					// Hay mas para enviar luego asi que cambiamos el primer byte a 1
-					buffer_tx[0] = '1';
-					if(!worker_send_recive(w,buffer_tx,buffer_rx)){
-						//Falla del worker al recibir los datos
-						return 0;
-					}
-					strcpy(buffer_tx,"0|");	//El 0 indica que no habria mas datos a enviar
-				}
-				//seguimos publando el buffer
-				strcat(buffer_tx,alias_get_name(alias));
-				strcat(buffer_tx,"|");
-				list_alias_next(site_get_alias(s));
-			}
-			// Enviamos los alias remanentes. Puede que este vacio
-			if(!worker_send_recive(w,buffer_tx,buffer_rx)){
-				//Falla del worker al recibir los datos
-				return 0;
-			}
+	if(worker_send_receive(w,send_message,send_message_size,&rcv_message,&rcv_message_size)){
+		if(rcv_message[0] == '1'){
 			list_site_add(w->sites,s);
 			list_worker_add(site_get_workers(s),w);
-			return 1;
 		}  else {
-			return 0;
+			ok=0;
 		}
 	} else {
-		// Problemas para contactar al worker
-		return 0;
+		ok=0;
 	}
+	free(send_message);
+	free(rcv_message);
+	return ok;
 }
 
 int worker_remove_site(T_worker *w, T_site *s){
 	/* Remueve fisica y logicamente un sitio de un worker */
-	char buffer_rx[ROLE_BUFFER_SIZE];
-        char buffer_tx[ROLE_BUFFER_SIZE];
+	char send_message[100];
+	char *rcv_message;
+	uint32_t rcv_message_size;
+	int ok=1;
 
-	sprintf(buffer_tx,"d|%s",site_get_name(s));
+	sprintf(send_message,"d|%s",site_get_name(s));
 
-	worker_send_recive(w,buffer_tx,buffer_rx);
-	list_site_remove_id(worker_get_sites(w),site_get_id(s));
-	list_worker_remove_id(site_get_workers(s),worker_get_id(w));
-	return 1;
+	if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
+		list_site_remove_id(worker_get_sites(w),site_get_id(s));
+		list_worker_remove_id(site_get_workers(s),worker_get_id(w));
+	} else {
+		ok=0;
+	}
+	free(rcv_message);
+	return ok;
 }
 
-int worker_send_recive(T_worker *w, char *command, char *buffer_rx){
+int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_size,
+			char **rcv_message, uint32_t *rcv_message_size){
 	/* Se conecta al worker, envia un comando y espera la respuesta */
+	char buffer[ROLE_BUFFER_SIZE];
+	char printB[ROLE_BUFFER_SIZE+1];
+	uint32_t parce_size;
+	int first_message=1;
+	int pos;
+	uint32_t c=0;
 
-	int cant_bytes;
-
-	cant_bytes = send(w->socket,command, ROLE_BUFFER_SIZE,0);
-	printf("%s: send_recive %p - enviando(%i): %s\n",w->name,&(w->socket),cant_bytes,command);
-	if(cant_bytes <0){
-		printf("Send_recive: FALLO SEND!!!!\n");
-		/* Fallo la conectividad contra el worker */
-		worker_change_status(w,W_UNKNOWN);
-		/* Reintentamos conectar */
-		worker_connect(w);
+	/* Verificamos que el final del send_message sea '\0' */
+	if( send_message[send_message_size-1] != '\0'){
+		printf("worker_send_receive: ERROR. send_message no termina en \\0 = %c\n",send_message[send_message_size]);
 		return 0;
 	}
-	cant_bytes = recv(w->socket,buffer_rx,ROLE_BUFFER_SIZE,0);
-	if(cant_bytes<0){
-		printf("Send_recive: FALLO RECV!!!!\n");
-		/* Fallo la conectividad contr el worker */
-		worker_change_status(w,W_UNKNOWN);
-		/* Reintentamos conectar */
-		worker_connect(w);
-		return 0;
+	
+	printf("SEND-------SEND----SEND-----\n");
+	printf("Mensaje al worker. ROLE_BUFFER_SIZE=%i , send_message_size=:%i, send_message=%s\n",ROLE_BUFFER_SIZE,send_message_size,send_message);
+	/* Los 4 primeros bytes del header es el tamano total del mensaje */
+	int_to_4bytes(&send_message_size,buffer);
+
+	while(c < send_message_size){
+		/* Hay que incluir un header de tamano ROLE_HEADER_SIZE */
+		if(send_message_size - c + ROLE_HEADER_SIZE < ROLE_BUFFER_SIZE){
+			/* Entra todo en el buffer */
+			parce_size = send_message_size - c ;
+		} else {
+			/* No entra todo en el buffer */
+			parce_size = ROLE_BUFFER_SIZE - ROLE_HEADER_SIZE;
+		}
+		int_to_4bytes(&parce_size,&(buffer[4]));
+		memcpy(buffer + ROLE_HEADER_SIZE,send_message + c,parce_size);
+		c += parce_size;
+		if(send(w->socket,buffer,ROLE_BUFFER_SIZE,0)<0){
+			worker_change_status(w,W_UNKNOWN);
+			worker_connect(w);
+			return 0;
+		}
 	}
-	printf("send_recive - recibido(%i): %s\n",cant_bytes,buffer_rx);
+
+	/* Recibir */
+	c=0;
+	/* Al menos una recepcion esperamos recibir */
+	printf("RECEIV-------RECEIV-------RECEIV-----\n");
+	int_to_4bytes(&c,buffer);
+	int_to_4bytes(&c,&(buffer[4]));
+	do{
+		 if(recv(w->socket,buffer,ROLE_BUFFER_SIZE,0)<0){
+			worker_change_status(w,W_UNKNOWN);
+			worker_connect(w);
+			return 0;
+		}
+		/* Del header obtenemos el tamano de los datos que
+ 		 * recibiremos */
+		if(first_message){
+			first_message=0;
+			_4bytes_to_int(buffer,rcv_message_size);
+			*rcv_message=(char *)realloc(*rcv_message,*rcv_message_size);
+		}
+
+		_4bytes_to_int(&(buffer[4]),&parce_size);
+		memcpy(*rcv_message+c,&(buffer[ROLE_HEADER_SIZE]),parce_size);
+		c += parce_size;
+	} while (c < *rcv_message_size);
+	printf("RECEIV completo: %s\n",*rcv_message);
 	return 1;
 }
 
@@ -375,49 +421,48 @@ int worker_sync(T_worker *w, T_list_site *s){
 	/* Se conecta al worker, obtiene el listado
 	 * de sitios y actualiza las estructuras */
 
-	char buffer_rx[ROLE_BUFFER_SIZE];
-	char buffer_tx[ROLE_BUFFER_SIZE];
-	int nextdata = 0;	//Fin de transmision
-	int pos = 2;		// Ya que en 2 se indica si hay mas datos luego
+	char send_message[2];
+	char *rcv_message=NULL;
+	uint32_t rcv_message_size=0;
+	int pos = 0;		// Ya que en 2 se indica si hay mas datos luego
 	char aux[10];
 	T_site *site;
+	int ok=1;
 
 	printf("-- Entramos a Sync %s\n",w->name);
-	if(!worker_send_recive(w,"G\0",buffer_rx)){
-		return 0;
-	}
 
-	do{
-		// El primer valor de los datos es un 1 o un 0. Es un 1 si hay mas datos
-		// para recibir luego de estos
-		parce_data(buffer_rx,'|',&pos,aux);
-		nextdata = atoi(aux);
-		while(strlen(buffer_rx) > 0 && pos < strlen(buffer_rx)){
-			parce_data(buffer_rx,'|',&pos,aux);
-			site = list_site_find_id(s,atoi(aux));
-			if(site){
-				list_site_add(w->sites,site);
-				list_worker_add(site_get_workers(site),w);
-			} else {
-				/* Ese sitio ya no existe en el sistema. lo eliminamos del worker */
-				printf ("IMPLEMENTER ELIMINACION DEL WORKER SITIOS YA NO EXISTENTES\n");
-			}
+	sprintf(send_message,"G");
+
+	if(!worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
+		ok=0;
+	}
+	while(pos<rcv_message_size){
+		parce_data(rcv_message,'|',&pos,aux);
+		site = list_site_find_id(s,atoi(aux));
+		if(site){
+			list_site_add(w->sites,site);
+			list_worker_add(site_get_workers(site),w);
+		} else {
+			/* Ese sitio ya no existe en el sistema. lo eliminamos del worker */
+			printf ("IMPLEMENTER ELIMINACION DEL WORKER SITIOS YA NO EXISTENTES\n");
 		}
-		if(nextdata == 1){
-			if(worker_send_recive(w,"1\0",buffer_rx)<0){
-				return 0;
-			}
-		}
-	} while(nextdata);
+	}
 	printf("-- Terminamos SYNC %s\n",w->name);
-	return 1;
+	free(rcv_message);
+	return ok;
 }
 
 int worker_reload(T_worker *w){
 	/* Le indica a un proxy que recargue su configuracion */
-	char buffer_tx[ROLE_BUFFER_SIZE];
+	char send_message[2];
+	char *rcv_message=NULL;
+	uint32_t rcv_message_size=0;
+	int ok;
 
-	return(worker_send_recive(w,"R\0",buffer_tx));
+	sprintf(send_message,"R");
+	ok = worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size);
+	free(rcv_message);
+	return ok;
 }
 
 /*****************************
@@ -457,17 +502,9 @@ unsigned int proxy_get_last_time(T_proxy *p){
 }
 
 void proxy_change_status(T_proxy *p, T_proxy_status s){
-	/* funcion de uso interno */
-	/* Retorna 1 si cambio el estado. 0 en caso contrario */
-	char aux[100];
-	char aux2[100];
-
 	/* Solo actualizamos el estado si es distinto
 	 * del que ya posee */
-	itowstatus(p->last_status,aux);
-	itowstatus(s,aux2);
 	if(p->status != s){
-		printf("change_status: %s -> %s\n",aux,aux2);
 		p->time_change_status = (unsigned long)time(0);
 		p->last_status = p->status;
 		p->status = s;
@@ -540,7 +577,7 @@ int proxy_add_site(T_proxy *p, T_site *s){
 
 	char buffer_rx[ROLE_BUFFER_SIZE];
 	char buffer_tx[ROLE_BUFFER_SIZE];
-	T_alias *alias;
+	T_s_e *alias;
 	T_worker *worker;
 	char aux[512];
 
@@ -597,11 +634,11 @@ int proxy_add_site(T_proxy *p, T_site *s){
 
 	printf("COmenzamos con los alias!!!\n");
 	/* Enviamos los alias. Puede que requieran varios envios */
-	list_alias_first(site_get_alias(s));
+	list_s_e_first(site_get_alias(s));
 	strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar luego
-	while(!list_alias_eol(site_get_alias(s))){
-		alias = list_alias_get(site_get_alias(s));
-		if(strlen(alias_get_name(alias)) +
+	while(!list_s_e_eol(site_get_alias(s))){
+		alias = list_s_e_get(site_get_alias(s));
+		if(strlen(s_e_get_name(alias)) +
 		   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
 			// Buffer lleno. Enviamos lo que tenemos
 			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
@@ -613,9 +650,9 @@ int proxy_add_site(T_proxy *p, T_site *s){
 			strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
 		}
 		//seguimos publando el buffer
-		strcat(buffer_tx,alias_get_name(alias));
+		strcat(buffer_tx,s_e_get_name(alias));
 		strcat(buffer_tx,"|");
-		list_alias_next(site_get_alias(s));
+		list_s_e_next(site_get_alias(s));
 	}
 	// Enviamos los alias remanentes. Puede que este vacio
 	printf("Enviando remanente:%s\n",buffer_tx);
@@ -1227,92 +1264,3 @@ void list_proxy_erase(T_list_proxy *l){
 		list_proxy_remove(l);
 	}
 }
-
-/*****************************
-*	 Lista de alias
-******************************/
-void list_alias_init(T_list_alias *l){
-	l->first = NULL;
-	l->actual = NULL;
-	l->last = NULL;
-	l->size = 0;
-}
-
-void list_alias_add(T_list_alias *l, T_alias *a){
-	list_a_node *new;
-	list_a_node *aux;
-
-	new = (list_a_node*)malloc(sizeof(list_a_node));
-	new->next = NULL;
-	new->data = a;
-	l->size++;
-
-	if(l->first == NULL){
-		l->first = new;
-		l->last = new;
-	} else {
-		l->last->next = new;
-		l->last = new;
-	}
-}
-
-void list_alias_first(T_list_alias *l){
-	l->actual = l->first;
-}
-
-void list_alias_next(T_list_alias *l){
-	if(l->actual != NULL){
-		l->actual = l->actual->next;
-	}
-}
-
-T_alias *list_alias_get(T_list_alias *l){
-	return l->actual->data;
-}
-
-unsigned int list_alias_size(T_list_alias *l){
-	return l->size;
-}
-
-int list_alias_eol(T_list_alias *l){
-	return (l->actual == NULL);
-}
-
-T_alias *list_alias_remove(T_list_alias *l){
-	list_a_node *prio;
-	list_a_node *aux;
-	T_alias *element;
-
-	if(l->actual != NULL){
-		aux = l->first;
-		prio = NULL;
-		while(aux != l->actual){
-			prio = aux;
-			aux = aux->next;
-		}
-		if(prio == NULL){
-			l->first = aux->next;
-		} else {
-			prio->next = aux->next;
-		}
-		if(aux == l->last){
-			l->last = prio;
-		}
-		l->actual = aux->next;
-		element = aux->data;
-		free(aux);
-	}
-	return element;
-}
-
-/*
-void list_alias_lock(T_list_alias *l){
-	printf("LOCK Alias\n");
-	pthread_mutex_lock(&(l->lock));
-}
-
-void list_alias_unlock(T_list_alias *l){
-	printf("UNLOCK Alias\n");
-	pthread_mutex_unlock(&(l->lock));
-}
-*/

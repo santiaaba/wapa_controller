@@ -47,7 +47,7 @@ void db_load_sites(T_db *db, T_list_site *l){
 	char query[200];
 	MYSQL_ROW row, row_alias;
 	T_site *new_site;
-	T_alias *new_alias;
+	T_s_e *new_alias;
 
 	strcpy(query,"select s.id,name,hash_dir,version,size from web_site s inner join web_suscription p on (s.susc_id = p.id)");
 
@@ -65,9 +65,9 @@ void db_load_sites(T_db *db, T_list_site *l){
 		mysql_query(db->con,query);
 		MYSQL_RES *result_alias = mysql_store_result(db->con);
 		while ((row_alias = mysql_fetch_row(result_alias))){
-			new_alias = (T_alias*)malloc(sizeof(T_alias));
-			alias_init(new_alias,atoi(row_alias[0]),row_alias[1]);
-			list_alias_add(site_get_alias(new_site),new_alias);
+			new_alias = (T_s_e*)malloc(sizeof(T_s_e));
+			s_e_init(new_alias,atoi(row_alias[0]),row_alias[1]);
+			list_s_e_add(site_get_alias(new_site),new_alias);
 		}
 		list_site_add(l,new_site);
 	}
@@ -166,11 +166,7 @@ void db_worker_start(T_db *db, int id){
 }
 
 void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
-	/* Retorna el lsitado con el siguiente formato
-	id|<id>|name|<name>|status|<status>|...
-
-	Lo retornamos en formato json
- 	*/
+	/* Lo retornamos en formato json */
 	const int max_c_site=300; //Los datos de un solo sitio no deben superar este valor
 	
 	char query[200];
@@ -199,4 +195,55 @@ void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 	(*data)[strlen(*data) - 1] = ']';
 	printf("Resultado:-%s-\n",*data);
 	*data_size = real_size;
+}
+
+void db_site_show(T_db *db, char **data, int *data_size, char *site_id){
+
+	char query[200];
+	char aux[500];
+	MYSQL_RES *result;
+	MYSQL_ROW row;
+
+	sprintf(query,"select * from web_site where id =%s",site_id);
+	printf("DB_SITE_LIST: %s\n",query);
+	mysql_query(db->con,query);
+	if(result = mysql_store_result(db->con)){
+		if(row = mysql_fetch_row(result)){
+			*data_size = 500;
+			printf("Allocamos memoria\n");
+			*data=(char *)realloc(*data,*data_size);
+			printf("colocamos info\n");
+			sprintf(*data,"{\"id\":\"%s\",\"version\":\"%s\",\"name\":\"%s\",\"size\":\"%s\",\"susc_id\":\"%s\",\"status\":\"%s\",\"urls\":[",
+				row[0],row[1],row[2],row[3],row[4],row[5]);
+	
+			/* Listado de alias */
+			sprintf(query,"select id,alias from web_alias where site_id =%s",site_id);
+			printf("DB_SITE_LIST: %s\n",query);
+			mysql_query(db->con,query);
+			result = mysql_store_result(db->con);
+			while(row = mysql_fetch_row(result)){
+				sprintf(aux,"{\"id\":\"%s\",\"url\":\"%s\"),",row[0],row[1]);
+				//Si no entra en *data, reallocamos para que entre y un poco mas
+				if(strlen(*data)+strlen(aux)+1 < *data_size){
+					*data_size =+ 200;
+					*data=(char *)realloc(*data,*data_size);
+				}
+				strcat(*data,aux);
+			}
+			// Reemplazamos la última "," por "]"
+			(*data)[strlen(*data) - 1] = ']';
+			//Cerramos los datos con '}' y redimencionamos el string
+		} else {
+			*data_size = 100;
+			*data=(char *)realloc(*data,*data_size);
+			sprintf(*data,"{\"error\":\"site not exist\"");
+		}
+	} else {
+		*data_size = 100;
+		*data=(char *)realloc(*data,*data_size);
+		sprintf(*data,"{\"error\":\"db error\"");
+	}
+	*data_size = strlen(*data) + 2;
+	*data=(char *)realloc(*data,*data_size);
+	strcat(*data,"}");
 }

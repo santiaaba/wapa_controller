@@ -67,23 +67,8 @@ void task_destroy(T_task **t){
 	free(*t);
 }
 
-void task_site_list(T_task *t, T_db *db){
-	/* Lista sitios de una suscripcion dada */
-	char *susc_id;
-
-	susc_id = dictionary_get(t->data,"susc_id");
-	db_site_list(db, &(t->result),&(t->result_size),susc_id);
-	/* Falta agregar una lista de los workers donde esta
- 	   cada site */
-}
-
-void task_site_show(T_task *t, T_list_site *l){
-	char *id;
-	T_site *site;
-
-	id = dictionary_get(t->data,"id");
-	site = list_site_find_id(l,atoi(id));
-	json_site(&(t->result),&(t->result_size),site);
+char *task_get_token(T_task *t){
+	return t->token;
 }
 
 char *task_get_result(T_task *t){
@@ -94,25 +79,22 @@ char *task_get_id(T_task *t){
 	return t->id;
 }
 
-void task_worker_list(T_task *t, T_list_worker *l){
-	json_workers(&(t->result),&(t->result_size),l);
+void task_site_list(T_task *t, T_db *db){
+	/* Lista sitios de una suscripcion dada */
+	char *susc_id;
+
+	susc_id = dictionary_get(t->data,"susc_id");
+	db_site_list(db,&(t->result),&(t->result_size),susc_id);
+	/* Falta agregar una lista de los workers donde esta
+ 	   cada site */
 }
 
-void task_worker_show(T_task *t, T_list_worker *l){
+void task_site_show(T_task *t, T_db *db){
 	char *id;
-	T_worker *worker;
+	T_site *site;
 
-	id = dictionary_get(t->data,"id");
-	worker = list_worker_find_id(l,atoi(id));
-	json_worker(&(t->result),&(t->result_size),worker);
-}
-
-char *task_get_token(T_task *t){
-	return t->token;
-}
-
-char *tob_get_id(T_task *t){
-	return t->id;
+	id = dictionary_get(t->data,"site_id");
+	db_site_show(db,&(t->result),&(t->result_size),id);
 }
 
 int task_site_add(T_task *t, T_list_site *l, T_db *db){
@@ -160,7 +142,26 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 int task_site_del(T_task *t, T_list_site *l, T_db *db){
 }
 
+int task_site_stop(T_task *t, T_list_site *l, T_db *db){
+}
+
+int task_site_start(T_task *t, T_list_site *l, T_db *db){
+}
+
 int task_site_mod(T_task *t, T_list_site *l, T_db *db){
+}
+
+void task_worker_list(T_task *t, T_list_worker *l){
+	json_workers(&(t->result),&(t->result_size),l);
+}
+
+void task_worker_show(T_task *t, T_list_worker *l){
+	char *id;
+	T_worker *worker;
+
+	id = dictionary_get(t->data,"id");
+	worker = list_worker_find_id(l,atoi(id));
+	json_worker(&(t->result),&(t->result_size),worker);
 }
 
 int task_worker_stop(T_task *t, T_list_worker *l, T_db *db){
@@ -177,12 +178,6 @@ int task_worker_start(T_task *t, T_list_worker *l, T_db *db){
 	int id = atoi(dictionary_get(t->data,"id"));
 	worker_start(list_worker_find_id(l,id));
 	//db_worker_start(db,id);
-}
-
-int task_site_stop(T_task *t, T_list_site *l, T_db *db){
-}
-
-int task_site_start(T_task *t, T_list_site *l, T_db *db){
 }
 
 T_task_type task_c_to_type(char c){
@@ -216,7 +211,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		case T_SITE_LIST:
 			task_site_list(t,db); break;
 		case T_SITE_SHOW:
-			task_site_show(t,sites); break;
+			task_site_show(t,db); break;
 		case T_SITE_ADD:
 			task_site_add(t,sites,db); break;
 		case T_SITE_DEL:
@@ -386,7 +381,7 @@ T_task *bag_task_pop(T_bag_task *b, T_taskid *id){
 			printf("	Avanzamos. No son iguales\n");
 			b->actual = b->actual->next;
 		}
-		sleep(5);
+		//sleep(5);
 	}
 	if(exist)
 		taux = bag_site_remove(b);

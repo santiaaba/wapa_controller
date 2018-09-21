@@ -12,6 +12,13 @@ void _4bytes_to_int(char *_4bytes, uint32_t *i){
  *      CLOUD	        *
  ************************/
 
+void server_check(T_server *s, char **send_message, int *send_message_size){
+	/* DE MOMENTO RETORNA SOLO 1. La idea es que retorne el estado de la nube */
+	*send_message_size=2;
+	*send_message = (char *)realloc(*send_message,*send_message_size);
+	strcpy(*send_message,"1");
+}
+
 void server_add_task(T_server *s, T_task *t, char **message, uint32_t *message_size){
 
 	pthread_mutex_lock(&(s->mutex_heap_task));
@@ -27,7 +34,7 @@ void *server_do_task(void *param){
 	T_server *s= (T_server *)param;
 
 	while(1){
-		sleep(5);
+		//sleep(5);
 		pthread_mutex_lock(&(s->mutex_heap_task));
 			task = heap_task_pop(&(s->tasks_todo));
 		pthread_mutex_unlock(&(s->mutex_heap_task));
@@ -145,6 +152,11 @@ int send_all_message(T_server *s, char *send_message, uint32_t send_message_size
 	uint32_t parce_size;
 
 	printf("Enviaremos al CORE: %s\n",send_message);
+	if( send_message[send_message_size-1] != '\0'){
+		printf("cloud_send_receive: ERROR. send_message no termina en \\0");
+		return 0;
+	}
+
 	/* Los 4 primeros bytes del header es el tamano total del mensaje */
         int_to_4bytes(&send_message_size,buffer);
 
@@ -207,8 +219,6 @@ void *server_listen(void *param){
 
 		// Aguardamos continuamente que el cliente envie un comando
 		while(recv_all_message(s,&recv_message,&recv_message_size)){
-			//printf("PROBANDO ALLOCAMIENTO LUEGO DE RECIBIR UN MENSAJE\n");
-			//send_message=(char *)realloc(send_message,100);
 			printf("Recibimos -%s-\n",recv_message);
 			if(recv_message[0] == 't'){
 				/* nos solicitan el estado de un task */
@@ -216,17 +226,16 @@ void *server_listen(void *param){
 				parce_data(recv_message,'|',&pos,taskid);
 				server_get_task(s,(T_taskid *)taskid,&send_message,&send_message_size);
 				printf("ENVIAMOS RESULTADO TASK %i:%i -%s-\n",send_message_size, strlen(send_message), send_message);
+			} else if(recv_message[0] == 'c'){
+				/* nos solicitan un chequeo */
+				server_check(s,&send_message,&send_message_size);
 			} else {
 				/* Creamos el task  */
 				if(create_task(&task,recv_message)){
 					server_add_task(s,task,&send_message,&send_message_size);
-					//printf("PROBANDO ALLOCAMIENTO LUEGO DE CREAR EL TASK\n");
-					//send_message=(char *)realloc(send_message,100);
 				}
 			}
 			send_all_message(s,send_message,send_message_size);
-			//printf("PROBANDO ALLOCAMIENTO LUEGO  DE ENVIAR EL MENSAJE\n");
-			//send_message=(char *)realloc(send_message,100);
 
 			/* 
 			printf("liberamos memoria\n");
