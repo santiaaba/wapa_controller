@@ -283,38 +283,49 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 
 	T_s_e *aux_s_e;
 
+	printf("WORKER_ADD_SITE: Entro\n");
 	send_message_size = 100;
 	send_message = (char *)malloc(send_message_size);
-	sprintf(send_message,"A|%s|%lu|%s|%i|%s|",site_get_id(s),site_get_name(s),site_get_dir(s),
+	sprintf(send_message,"A%lu|%s|%s|%i|",site_get_id(s),site_get_name(s),site_get_dir(s),
 	site_get_version(s));
 
 	// Armar los alias
+	printf("WORKER_ADD_SITE: armamos alias\n");
 	list_s_e_first(site_get_alias(s));
 	while(!list_s_e_eol(site_get_alias(s))){
 		aux_s_e = list_s_e_get(site_get_alias(s));
+		printf("alias agregado: %s\n",s_e_get_name(aux_s_e));
 		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
 		if(send_message_size < strlen(send_message) + strlen(aux) + 2){
+			printf("allocando espacio\n");
 			send_message_size += 100;
 			send_message = (char *)realloc(send_message,send_message_size);
-			strcat(send_message,aux);
 		}
+		strcat(send_message,aux);
+		list_s_e_next(site_get_alias(s));
 	}
+	send_message[strlen(send_message)-1] = '|';
+
 	// Armar los indices
+	printf("WORKER_ADD_SITE: armamos indices\n");
 	list_s_e_first(site_get_indexes(s));
 	while(!list_s_e_eol(site_get_indexes(s))){
 		aux_s_e = list_s_e_get(site_get_indexes(s));
+		printf("index agregado: %s\n",s_e_get_name(aux_s_e));
 		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
 		if(send_message_size < strlen(send_message) + strlen(aux) + 2){
 			send_message_size += 100;
 			send_message = (char *)realloc(send_message,send_message_size);
-			strcat(send_message,aux);
 		}
+		strcat(send_message,aux);
+		list_s_e_next(site_get_indexes(s));
 	}
 
 	/* Normalizamos el send_message */
 	send_message_size = strlen(send_message)+1;
 	send_message = (char *)realloc(send_message,send_message_size);
 	
+	printf("WORKER_ADd_SITE: enviamos mensaje\n");
 	if(worker_send_receive(w,send_message,send_message_size,&rcv_message,&rcv_message_size)){
 		if(rcv_message[0] == '1'){
 			list_site_add(w->sites,s);
@@ -333,7 +344,7 @@ int worker_add_site(T_worker *w, T_site *s,char *default_domain){
 int worker_remove_site(T_worker *w, T_site *s){
 	/* Remueve fisica y logicamente un sitio de un worker */
 	char send_message[100];
-	char *rcv_message;
+	char *rcv_message=NULL;
 	uint32_t rcv_message_size;
 	int ok=1;
 
@@ -365,8 +376,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 		return 0;
 	}
 	
-	printf("SEND-------SEND----SEND-----\n");
-	printf("Mensaje al worker. ROLE_BUFFER_SIZE=%i , send_message_size=:%i, send_message=%s\n",ROLE_BUFFER_SIZE,send_message_size,send_message);
+	printf("WORKER SEND: send_message_size=:%u, send_message=%s\n",send_message_size,send_message);
 	/* Los 4 primeros bytes del header es el tamano total del mensaje */
 	int_to_4bytes(&send_message_size,buffer);
 
@@ -392,7 +402,6 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 	/* Recibir */
 	c=0;
 	/* Al menos una recepcion esperamos recibir */
-	printf("RECEIV-------RECEIV-------RECEIV-----\n");
 	int_to_4bytes(&c,buffer);
 	int_to_4bytes(&c,&(buffer[4]));
 	do{
@@ -413,7 +422,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 		memcpy(*rcv_message+c,&(buffer[ROLE_HEADER_SIZE]),parce_size);
 		c += parce_size;
 	} while (c < *rcv_message_size);
-	printf("RECEIV completo: %s\n",*rcv_message);
+	printf("WORKER RCV: send_message_size=:%u, send_message=%s\n",rcv_message_size,*rcv_message);
 	return 1;
 }
 
@@ -424,7 +433,7 @@ int worker_sync(T_worker *w, T_list_site *s){
 	char send_message[2];
 	char *rcv_message=NULL;
 	uint32_t rcv_message_size=0;
-	int pos = 0;		// Ya que en 2 se indica si hay mas datos luego
+	int pos = 0;
 	char aux[10];
 	T_site *site;
 	int ok=1;
@@ -559,9 +568,13 @@ void proxy_reconfig(T_proxy *p, T_list_site *sites){
 	/* Reconfigura un proxy en base a la informacion
 	   de los sitios. Borra toda configuracion anterior.
 	   De momento un proxy ve todos los sitios y no unos en particular */
-	char buffer_rx[ROLE_BUFFER_SIZE];
 
-	if(proxy_send_recive(p,"D",buffer_rx)){
+	char send_message[200];
+	char *rcv_message=NULL;
+	uint32_t rcv_message_size=0;
+
+	sprintf(send_message,"D");
+	if(proxy_send_receive(p,send_message,2,&rcv_message,&rcv_message_size)){
 		list_site_first(sites);
 		while(!list_site_eol(sites)){
 			printf("Agregamos el sitio al proxy\n");
@@ -575,119 +588,106 @@ void proxy_reconfig(T_proxy *p, T_list_site *sites){
 int proxy_add_site(T_proxy *p, T_site *s){
 	/* Reconfigura el proxy para el sitio indicado */
 
-	char buffer_rx[ROLE_BUFFER_SIZE];
-	char buffer_tx[ROLE_BUFFER_SIZE];
-	T_s_e *alias;
+	char *send_message=NULL;
+        char *rcv_message=NULL;
+        uint32_t rcv_message_size=0;
+        uint32_t send_message_size=0;
+	T_s_e *aux_s_e;
 	T_worker *worker;
 	char aux[512];
+	int ok=1;
 
-	/* Si el sitio no tiene workers e ntonces mas
+	/* Si el sitio no tiene workers entonces mas
  	 * que agregarlo lo eliminamos */
 
+	send_message=(char *)malloc(100);
 	if(list_worker_size(site_get_workers(s)) == 0){
-		sprintf(buffer_tx,"d|%s",site_get_name(s));
-		if(!proxy_send_recive(p,buffer_tx,buffer_rx))
-			return 0;
-		return 1;
-	}
+		sprintf(send_message,"d%s",site_get_name(s));
+		send_message_size=strlen(send_message)+1;
+		if(!proxy_send_receive(p,send_message,send_message_size,&rcv_message,&rcv_message_size))
+			ok = 0;
+		ok = 1;
+	} else {
 	/* Si posee workers entonces proseguimos */
+		
+		sprintf(send_message,"A%s|%lu|%i|",site_get_name(s),
+			site_get_id(s),site_get_version(s));
 
-	sprintf(buffer_tx,"A|%s|%lu|%i",site_get_name(s),
-		site_get_id(s),site_get_version(s));
-
-	if(!proxy_send_recive(p,buffer_tx,buffer_rx))
-		return 0;
-
-	if(buffer_rx[0] != '1')
-		return 0;
-
-	printf("pasamos a enviar los workers\n");
-	/* Enviamos los workers. Puede que requieran varios envios */
-	list_worker_first(site_get_workers(s));
-	strcpy(buffer_tx,"0|");	 //El 0 indica que no habria mas datos a enviar luego
-	while(!list_worker_eol(site_get_workers(s))){
-		worker = list_worker_get(site_get_workers(s));
-		printf("Adjuntando worker %s\n",worker_get_name(worker));
-
-		if(strlen(worker_get_name(worker)) +
-		   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
-			// Buffer lleno. Enviamos lo que tenemos
-			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
-			buffer_tx[0] = '1';
-			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-				//Falla del proxy al recibir los datos
-				return 0;
+		printf("Armamos los workers\n");
+		list_worker_first(site_get_workers(s));
+		while(!list_worker_eol(site_get_workers(s))){
+			worker = list_worker_get(site_get_workers(s));
+			sprintf(aux,"%s,",worker_get_name(worker));
+			if(send_message_size < strlen(send_message) + strlen(aux) + 2){
+				printf("allocando espacio\n");
+				send_message_size += 100;
+				send_message = (char *)realloc(send_message,send_message_size);
 			}
-			strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
+			strcat(send_message,aux);
+			list_worker_next(site_get_workers(s));
 		}
-		//seguimos publando el buffer
-		strcat(buffer_tx,worker_get_name(worker));
-		strcat(buffer_tx,"|");
-		list_worker_next(site_get_workers(s));
-	}
-	// Enviamos los workers remanentes. Puede que este vacio
-	printf("Enviando remanente:%s\n",buffer_tx);
-	if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-		//Falla del proxy al recibir los datos
-		return 0;
-	}
-
-	printf("COmenzamos con los alias!!!\n");
-	/* Enviamos los alias. Puede que requieran varios envios */
-	list_s_e_first(site_get_alias(s));
-	strcpy(buffer_tx,"0|");		//El 0 indica que no habria mas datos a enviar luego
-	while(!list_s_e_eol(site_get_alias(s))){
-		alias = list_s_e_get(site_get_alias(s));
-		if(strlen(s_e_get_name(alias)) +
-		   strlen(buffer_tx) + 2 > ROLE_BUFFER_SIZE){
-			// Buffer lleno. Enviamos lo que tenemos
-			// Hay mas para enviar luego asi que cambiamos el primer byte a 1
-			buffer_tx[0] = '1';
-			if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-				//Falla del proxy al recibir los datos
-				return 0;
+		send_message[strlen(send_message)-1] = '|';
+		
+		printf("Armamos los alias\n");
+		list_s_e_first(site_get_alias(s));
+		while(!list_s_e_eol(site_get_alias(s))){
+			aux_s_e = list_s_e_get(site_get_alias(s));
+			printf("alias agregado: %s\n",s_e_get_name(aux_s_e));
+			sprintf(aux,"%s,",s_e_get_name(aux_s_e));
+			if(send_message_size < strlen(send_message) + strlen(aux) + 2){
+				printf("allocando espacio\n");
+				send_message_size += 100;
+				send_message = (char *)realloc(send_message,send_message_size);
 			}
-			strcpy(buffer_tx,"0|"); //El 0 indica que no habria mas datos a enviar
+			strcat(send_message,aux);
+			list_s_e_next(site_get_alias(s));
 		}
-		//seguimos publando el buffer
-		strcat(buffer_tx,s_e_get_name(alias));
-		strcat(buffer_tx,"|");
-		list_s_e_next(site_get_alias(s));
+		/* Normalizamos el send_message */
+		send_message_size = strlen(send_message)+1;
+		send_message = (char *)realloc(send_message,send_message_size);
+	
+		printf("PROXY_ADD_SITE: enviamos mensaje\n");
+		if(proxy_send_receive(p,send_message,send_message_size,&rcv_message,&rcv_message_size)){
+			ok=1;
+		} else {
+			ok=0;
+		}
 	}
-	// Enviamos los alias remanentes. Puede que este vacio
-	printf("Enviando remanente:%s\n",buffer_tx);
-	if(!proxy_send_recive(p,buffer_tx,buffer_rx)){
-		//Falla del proxy al recibir los datos
-		return 0;
-	}
-	return 1;
+	free(rcv_message);
+	free(send_message);
+	return ok;
 }
 
 int proxy_change_site(T_proxy *p, T_site *s){
 
-	char buffer_rx[ROLE_BUFFER_SIZE];
-	char buffer_tx[ROLE_BUFFER_SIZE];
+	char send_message[200];
+        char *rcv_message=NULL;
+        uint32_t rcv_message_size=0;
 
 	/* Eliminamos la configuracion anterior */
-	sprintf(buffer_tx,"d|%s",site_get_name(s));
-	if(!proxy_send_recive(p,buffer_tx,buffer_rx))
+	sprintf(send_message,"d%s",site_get_name(s));
+	if(!proxy_send_receive(p,send_message,strlen(send_message)+1,&rcv_message,&rcv_message_size))
 		return 0;
-
+	/* Enviamos la configuracion nueva */
+	printf("Enviamos configuracion\n");
 	return proxy_add_site(p,s);
 }
 
 int proxy_reload(T_proxy *p){
 	/* Le indica a un proxy que recargue su configuracion */
-	char buffer_tx[ROLE_BUFFER_SIZE];
 
-	return(proxy_send_recive(p,"R\0",buffer_tx));
+	char *rcv_message=NULL;
+        uint32_t rcv_message_size=0;
+
+	return(proxy_send_receive(p,"R\0",2,&rcv_message,&rcv_message_size));
 }
 
 int proxy_check(T_proxy *p){
 	/* Verifica un proxy. Actualiza el estado del mismo */
 	/* Retorna 1 si cambio de estado. 0 En caso contrario */
 
-	char buffer_rx[ROLE_BUFFER_SIZE];
+	char *rcv_message=NULL;
+        uint32_t rcv_message_size=0;
 
 	/* Verificamos si responde correctamente */
 	/* Si esta OFFLINE no hacemos nada. Sigue en OFFLINE */
@@ -696,11 +696,11 @@ int proxy_check(T_proxy *p){
 		(unsigned long)p->time_change_status,
 		(unsigned long)time(0) - (unsigned long)p->time_change_status);
 	if(p->status != P_OFFLINE){
-		if(proxy_send_recive(p,"C",buffer_rx)){
-			printf("CHECK: -%s-\n",buffer_rx);
+		if(proxy_send_receive(p,"C\0",2,&rcv_message,&rcv_message_size)){
+			printf("CHECK: -%s-\n",rcv_message);
 			/* Actualizamos las estadisticas */
-			proxy_set_statistics(p, buffer_rx);
-			if(buffer_rx[0] == '1'){
+			proxy_set_statistics(p, rcv_message);
+			if(rcv_message[0] == '1'){
 				if(p->status == P_BROKEN || p->status == P_UNKNOWN){
 					/* Si estaba en BROKEN o UNKNOWN pasa a PREPARED */
 					proxy_change_status(p,P_PREPARED);
@@ -728,32 +728,74 @@ int proxy_check(T_proxy *p){
 	}
 }
 
-int proxy_send_recive(T_proxy *p, char *command, char *buffer_rx){
+int proxy_send_receive(T_proxy *p, char *send_message, uint32_t send_message_size,
+                        char **rcv_message, uint32_t *rcv_message_size){
 	/* Se conecta al proxy, envia un comando y espera la respuesta */
 
-	int cant_bytes;
+	char buffer[ROLE_BUFFER_SIZE];
+	char printB[ROLE_BUFFER_SIZE+1];
+	uint32_t parce_size;
+	int first_message=1;
+	int pos;
+	uint32_t c=0;
 
-	cant_bytes = send(p->socket,command, ROLE_BUFFER_SIZE,0);
-	printf("%s: send_recive %p - enviando(%i): %s\n",p->name,&(p->socket),cant_bytes,command);
-	if(cant_bytes <0){
-		printf("Send_recive: FALLO SEND!!!!\n");
-		/* Fallo la conectividad contra el proxy */
-		proxy_change_status(p,P_UNKNOWN);
-		/* Reintentamos conectar */
-		proxy_connect(p);
+	/* Verificamos que el final del send_message sea '\0' */
+	if( send_message[send_message_size-1] != '\0'){
+		printf("proxy_send_receive: ERROR. send_message no termina en \\0 = %c\n",send_message[send_message_size]);
 		return 0;
 	}
-	cant_bytes = recv(p->socket,buffer_rx,ROLE_BUFFER_SIZE,0);
-	if(cant_bytes<0){
-		printf("Send_recive: FALLO RECV!!!!\n");
-		/* Fallo la conectividad contr el proxy */
-		proxy_change_status(p,P_UNKNOWN);
-		/* Reintentamos conectar */
-		proxy_connect(p);
-		return 0;
+	
+	printf("SEND-------SEND----SEND-----\n");
+	printf("Mensaje al proxy. ROLE_BUFFER_SIZE=%i , send_message_size=:%i, send_message=%s\n",ROLE_BUFFER_SIZE,send_message_size,send_message);
+	/* Los 4 primeros bytes del header es el tamano total del mensaje */
+	int_to_4bytes(&send_message_size,buffer);
+
+	while(c < send_message_size){
+		/* Hay que incluir un header de tamano ROLE_HEADER_SIZE */
+		if(send_message_size - c + ROLE_HEADER_SIZE < ROLE_BUFFER_SIZE){
+			/* Entra todo en el buffer */
+			parce_size = send_message_size - c ;
+		} else {
+			/* No entra todo en el buffer */
+			parce_size = ROLE_BUFFER_SIZE - ROLE_HEADER_SIZE;
+		}
+		int_to_4bytes(&parce_size,&(buffer[4]));
+		memcpy(buffer + ROLE_HEADER_SIZE,send_message + c,parce_size);
+		c += parce_size;
+		if(send(p->socket,buffer,ROLE_BUFFER_SIZE,0)<0){
+			proxy_change_status(p,P_UNKNOWN);
+			proxy_connect(p);
+			return 0;
+		}
 	}
-	printf("send_recive - recibido(%i): %s\n",cant_bytes,buffer_rx);
+
+	/* Recibir */
+	c=0;
+	/* Al menos una recepcion esperamos recibir */
+	printf("RECEIV-------RECEIV-------RECEIV-----\n");
+	int_to_4bytes(&c,buffer);
+	int_to_4bytes(&c,&(buffer[4]));
+	do{
+		 if(recv(p->socket,buffer,ROLE_BUFFER_SIZE,0)<0){
+			proxy_change_status(p,P_UNKNOWN);
+			proxy_connect(p);
+			return 0;
+		}
+		/* Del header obtenemos el tamano de los datos que
+ 		 * recibiremos */
+		if(first_message){
+			first_message=0;
+			_4bytes_to_int(buffer,rcv_message_size);
+			*rcv_message=(char *)realloc(*rcv_message,*rcv_message_size);
+		}
+
+		_4bytes_to_int(&(buffer[4]),&parce_size);
+		memcpy(*rcv_message+c,&(buffer[ROLE_HEADER_SIZE]),parce_size);
+		c += parce_size;
+	} while (c < *rcv_message_size);
+	printf("RECEIV completo: %s\n",*rcv_message);
 	return 1;
+
 }
 
 /*****************************

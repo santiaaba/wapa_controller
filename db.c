@@ -65,6 +65,7 @@ void db_load_sites(T_db *db, T_list_site *l){
 		mysql_query(db->con,query);
 		MYSQL_RES *result_alias = mysql_store_result(db->con);
 		while ((row_alias = mysql_fetch_row(result_alias))){
+			printf("Agregando alias %s\n",row_alias[1]);
 			new_alias = (T_s_e*)malloc(sizeof(T_s_e));
 			s_e_init(new_alias,atoi(row_alias[0]),row_alias[1]);
 			list_s_e_add(site_get_alias(new_site),new_alias);

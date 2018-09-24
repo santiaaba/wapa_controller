@@ -34,7 +34,7 @@ void assign_proxys_site(T_list_proxy *proxys, T_site *site){
 }
 
 void assign_proxys_sites(T_list_proxy *proxys, T_list_site *sites){
-	/* Actualizamos el sitio en los proxys */
+	/* Actualizamos los sitios todos en los proxys */
 	T_proxy *proxy;
 	T_site *site;
 
@@ -44,11 +44,17 @@ void assign_proxys_sites(T_list_proxy *proxys, T_list_site *sites){
 		list_proxy_first(proxys);
 		while(!list_proxy_eol(proxys)){
 			proxy = list_proxy_get(proxys);
-			proxy_change_site(proxy,site);
+			if(proxy_get_status(proxy) == P_ONLINE ||
+			   proxy_get_status(proxy) == P_PREPARED){
+				printf("entro\n");
+				proxy_change_site(proxy,site);
+				printf("salio\n");
+			}
 			list_proxy_next(proxys);
 		}
 		list_site_next(sites);
 	}
+	printf("termino\n");
 }
 
 int init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys){
@@ -228,6 +234,7 @@ int reload_services(T_list_worker *workers, T_list_proxy *proxys){
 int check_proxys(T_list_proxy *proxys, T_list_site *sites){
 
 	T_proxy *proxy;
+	int cambio = 0;
 
 	list_proxy_first(proxys);
 	while(!list_proxy_eol(proxys)){
@@ -245,9 +252,11 @@ int check_proxys(T_list_proxy *proxys, T_list_site *sites){
 				printf("\tProxy %s paso de PREPARED a ONLINE.\n",
 					proxy_get_name(proxy));
 			}
+			cambio=1;
 		}
 		list_proxy_next(proxys);
 	}
+	return cambio;
 }
 
 int check_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *config){
@@ -413,27 +422,31 @@ void main(){
 
 	/* Comenzamos el loop del controller */
 	while(1){
-		sleep(5);
 
 		changed = 0;
 		server_lock(&server);
 
 		/* Chequeo de workers */
 		check_workers(&workers,&proxys,&config);
+		if(changed){ printf("@@@@@@@ check_workers CAMBIO\n"); }
 		/* Chequeo de proxys */
-		changed |= check_proxys(&proxys,&sites);
+		check_proxys(&proxys,&sites);	//No tiene sentido reiniciar todo
+		//if(changed){ printf("@@@@@@@ check_proxys CAMBIO\n"); }
 		
 		/* Asignacion sitios a worker */
 		changed |= normalice_sites(&sites, &workers, &proxys, &config);
+		if(changed){ printf("@@@@@@@ normalice_sites CAMBIO\n"); }
 
 		/* Balanceamos workers */
 		changed |= balance_workers(&workers,&proxys,&config);
+		if(changed){ printf("@@@@@@@ balance_workers CAMBIO\n"); }
 		server_unlock(&server);
 
 		if(changed)
 			reload_services(&workers,&proxys);
 
 		printf("Fin del bucle");
+		sleep(5);
 	}
 
 	/* Finalizamos el hilo del rest_server */
