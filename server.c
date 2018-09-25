@@ -21,6 +21,7 @@ void server_check(T_server *s, char **send_message, int *send_message_size){
 
 void server_add_task(T_server *s, T_task *t, char **message, uint32_t *message_size){
 
+	printf("Agregamos el task a la cola\n");
 	pthread_mutex_lock(&(s->mutex_heap_task));
 		heap_task_push(&(s->tasks_todo),t);
 		*message=(char *)realloc(*message,TASKID_SIZE + 2);
@@ -35,6 +36,7 @@ void *server_do_task(void *param){
 
 	while(1){
 		//sleep(5);
+		//printf("Corremos el task\n");
 		pthread_mutex_lock(&(s->mutex_heap_task));
 			task = heap_task_pop(&(s->tasks_todo));
 		pthread_mutex_unlock(&(s->mutex_heap_task));
@@ -73,6 +75,7 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result_message, uint3
 				strcpy(*result_message,"0");
 			}
 		} else {
+			printf("TASK finalizado. Informamos\n");
 			// A size_message le sumamos dos bytes. Uno para el "1" y otro para el \0
 			*size_message = strlen(task_get_result(task)) + 2;
 			*result_message=(char *)realloc(*result_message,((*size_message)));
@@ -103,13 +106,13 @@ int create_task(T_task **task, char *buffer_rx){
  	   la variable message */
 	char value[100];
 	char command;
-	int pos;
+	int pos=1;
 	T_dictionary *data;
 
+	printf("Creamos el task\n");
 	*task=(T_task *)malloc(sizeof(T_task));
 	data=(T_dictionary *)malloc(sizeof(T_dictionary));
 	dictionary_init(data);
-	pos = 1;
 	buffer_to_dictionary(buffer_rx,data,&pos);
 	task_init(*task,task_c_to_type(buffer_rx[0]),data);
 	return 1;

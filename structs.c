@@ -348,7 +348,7 @@ int worker_remove_site(T_worker *w, T_site *s){
 	uint32_t rcv_message_size;
 	int ok=1;
 
-	sprintf(send_message,"d|%s",site_get_name(s));
+	sprintf(send_message,"d%s",site_get_name(s));
 
 	if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
 		list_site_remove_id(worker_get_sites(w),site_get_id(s));

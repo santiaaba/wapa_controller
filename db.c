@@ -166,6 +166,29 @@ void db_worker_start(T_db *db, int id){
 	mysql_query(db->con,query);
 }
 
+int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size){
+	char query[200];
+        MYSQL_RES *result;
+        MYSQL_ROW row;
+	
+	sprintf(query,"select id from web_site where susc_id=%c",susc_id);
+	printf("QEURY : %s\n",query);
+        mysql_query(db->con,query);
+
+	*list_id_size=40;
+	*list_id = (char *)realloc(*list_id,*list_id_size);
+	while(row = mysql_fetch_row(result)){
+		if(*list_id_size < strlen(row[0] + strlen(*list_id)) + 2){
+			*list_id_size+=40;	// Se que mas de 40 no ocupa un site_id + "," + "\0";
+			*list_id = (char *)realloc(*list_id,*list_id_size);
+		}
+		strcat(*list_id,"%s");
+		strcat(*list_id,",");
+	}
+	*list_id[(*list_id_size)-1] = '\0';
+	return 1;
+}
+
 void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 	/* Lo retornamos en formato json */
 	const int max_c_site=300; //Los datos de un solo sitio no deben superar este valor
@@ -247,4 +270,64 @@ void db_site_show(T_db *db, char **data, int *data_size, char *site_id){
 	*data_size = strlen(*data) + 2;
 	*data=(char *)realloc(*data,*data_size);
 	strcat(*data,"}");
+}
+
+int db_del_site(T_db *db, char *site_id){
+	char query[200];
+
+	/* Borramos alias */
+	sprintf(query,"delete from web_alias where site_id=%s",site_id);
+	printf("db_del_site: %s\n",query);
+	mysql_query(db->con,query);
+
+	/* Borramos indices */
+	sprintf(query,"delete from web_indexes where site_id=%s",site_id);
+	printf("db_del_site: %s\n",query);
+	mysql_query(db->con,query);
+
+	/* Borrar entradas del ftp */
+	/* IMPLEMENTAR */
+
+	/* Borramos sitio */
+	sprintf(query,"delete from web_site where id=%s",site_id);
+	printf("db_del_site: %s\n",query);
+	mysql_query(db->con,query);
+	return 1;
+}
+
+int db_del_all_site(T_db *db, char *susc_id){
+	char query[200];
+	MYSQL_RES *result;
+        MYSQL_ROW row;
+
+	sprintf(query,"select id from web_site where susc_id=%s",susc_id);
+        mysql_query(db->con,query);
+	if(result = mysql_store_result(db->con)){
+		while(row = mysql_fetch_row(result)){
+			db_del_site(db,row[0]);
+		}
+	} else {
+		return 0;
+	}
+	return 1;
+}
+
+int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name){
+	char query[200];
+	MYSQL_RES *result;
+        MYSQL_ROW row;
+
+	sprintf(query,"select name,hash_dir from web_site s inner join web_suscription u on (s.susc_id = u.id) where s.id=%s", site_id);
+        mysql_query(db->con,query);
+	if(result = mysql_store_result(db->con)){
+		if(row = mysql_fetch_row(result)){
+			strcpy(hash_dir,row[1]);
+			strcpy(site_name,row[0]);
+			return 1;
+		} else {
+			return 0;
+		}
+	} else {
+		return 0;
+	}
 }

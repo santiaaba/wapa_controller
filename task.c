@@ -105,7 +105,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 	char *name;
 	char *susc_id;
 	char command[300];
-	char dir[10];
+	char hash_dir[6];
 	unsigned int id;
 	
 	printf("Agregar un sitio nuevo\n");
@@ -123,13 +123,13 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 
 	// Alta en la base de datos del sitio
 	printf("Alta a la base de datos\n");
-	if(!db_add_site(db,&newsite,name,atoi(susc_id),dir)){ return 0; }
+	if(!db_add_site(db,&newsite,name,atoi(susc_id),hash_dir)){ return 0; }
 
 	// Creacion del espacio de almacenamiento
 	printf("Creacion de directorios\n");
-	sprintf(command,"mkdir -p /websites/%s/%s/wwwroot",dir,name);
+	sprintf(command,"mkdir -p /websites/%s/wwwroot",hash_dir);
 	if(system(command) != 0){ return 0; }
-	sprintf(command,"mkdir -p /websites/%s/%s/logs",dir,name);
+	sprintf(command,"mkdir -p /websites/%s/logs",hash_dir);
 	if(system(command) != 0){ return 0; }
 
 	// Adicion del sitio a la lista
@@ -140,7 +140,69 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 }
 
 int task_site_del(T_task *t, T_list_site *l, T_db *db){
+	char hash_dir[6];
+	char site_name[100];
+	char command[200];
+	char *site_id;
+	T_site *site;
+	T_worker *worker;
+
+	printf("task_site_del\n");
+
+	/* Borra un sitio en particular */
+	dictionary_print(t->data);
+	site_id = dictionary_get(t->data,"site_id");
+	if(strcmp(site_id,"") == 0){ return 0; }
+
+	/* Borramos de la base de datos */
+	if(!db_get_hash_dir(db,site_id,hash_dir,site_name)){ return 0; }
+	db_del_site(db,site_id);
+
+	/* Lo borramos logicamente y quitamos del apache */
+	site = list_site_find_id(l,atoi(site_id));
+	list_worker_first(site_get_workers(site));
+	while(!list_worker_eol(site_get_workers(site))){
+		worker = list_worker_get(site_get_workers(site));
+		worker_remove_site(worker,site);
+		list_worker_next(site_get_workers(site));
+	}
+
+	/* Lo borramos fisicamente */
+	sprintf(command,"rm -rf /websites/%s/%s",hash_dir,site_name);
+	if(system(command) != 0){ return 0; }
+	return 1;
 }
+
+int task_site_alldel(T_task *t, T_list_site *l, T_db *db){
+	/* Borra todos los sitios de una suscripcion */
+	/* Retorna 1 si pudo borrar todo. Caso contrario retorna 0 */
+	T_task *task_aux;
+	int ok=1;
+	char site_id[100];
+	char *susc_id;
+	int pos;
+	char *aux=NULL;
+	int aux_size;
+
+	task_aux = (T_task *)malloc(sizeof(T_task));
+	dictionary_print(t->data);
+	susc_id = dictionary_get(t->data,"susc_id");
+	if(strcmp(susc_id,"") != 0){
+		pos=0;
+		db_get_sites_id(db,susc_id,&aux,&aux_size);
+		while(pos<aux_size){
+			parce_data(aux,',',&pos,site_id);
+			dictionary_add(task_aux->data,"site_id",site_id);
+			ok &= task_site_del(task_aux,l,db);
+			dictionary_remove(task_aux->data,"site_id");
+		}
+	}
+	free(task_aux);
+	free(aux);
+	return ok;
+}
+
+	
 
 int task_site_stop(T_task *t, T_list_site *l, T_db *db){
 }
@@ -187,6 +249,7 @@ T_task_type task_c_to_type(char c){
 		case 'a': return T_SITE_ADD;
 		case 'm': return T_SITE_MOD;
 		case 'd': return T_SITE_DEL;
+		case 'b': return T_SITE_ALLDEL;
 		case 'k': return T_SITE_STOP;
 		case 'e': return T_SITE_START;
 
@@ -203,10 +266,9 @@ T_task_type task_c_to_type(char c){
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		T_list_proxy *proxys, T_db *db){
 	/* Ejecuta el JOB */
-	printf("paso\n");
 	t->status = T_RUNNING;
-	printf("paso\n");
 
+	printf("TASK_RUN\n");
 	switch(t->type){
 		case T_SITE_LIST:
 			task_site_list(t,db); break;
@@ -216,6 +278,8 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 			task_site_add(t,sites,db); break;
 		case T_SITE_DEL:
 			task_site_del(t,sites,db); break;
+		case T_SITE_ALLDEL:
+			task_site_alldel(t,sites,db); break;
 		case T_SITE_MOD:
 			task_site_mod(t,sites,db); break;
 		case T_SITE_STOP:
@@ -231,6 +295,9 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 //			task_server_stop(t,workers,db); break;
 //		case T_SERVER_START:
 //			task_server_start(t,workers,db); break;
+		default:
+			printf("ERROR FATAL. TASK_TYPE indefinido\n");
+
 	}
 	t->status = T_DONE;
 }
@@ -323,7 +390,6 @@ void bag_task_add(T_bag_task *b, T_task *t){
 	bag_t_node *new;
 	bag_t_node *aux;
 
-	printf("Entroooo\n");
 	new = (bag_t_node*)malloc(sizeof(bag_t_node));
 	new->next = NULL;
 	new->data = t;

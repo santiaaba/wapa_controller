@@ -22,6 +22,7 @@ typedef enum {
 		T_SITE_ADD,
 		T_SITE_MOD,
 		T_SITE_DEL,
+		T_SITE_ALLDEL,
 		T_SITE_STOP,
 		T_SITE_START,
 
