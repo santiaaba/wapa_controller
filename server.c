@@ -64,6 +64,7 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result_message, uint3
 		bag_task_print(&(s->tasks_done));
 		task = bag_task_pop(&(s->tasks_done),taskid);
 		if(NULL == task){
+			/* No ha finalizado o no existe */
 			*size_message=2;
 			*result_message=(char *)realloc(*result_message,*size_message);
 			/* Verificamos si esta en la cola de tareas pendientes */
@@ -76,7 +77,7 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result_message, uint3
 			}
 		} else {
 			printf("TASK finalizado. Informamos\n");
-			// A size_message le sumamos dos bytes. Uno para el "1" y otro para el \0
+			// A size_message le sumamos dos bytes. Uno para el 1 (task finalizado) y otro para el \0
 			*size_message = strlen(task_get_result(task)) + 2;
 			*result_message=(char *)realloc(*result_message,((*size_message)));
 			sprintf(*result_message,"1%s",task_get_result(task));
@@ -239,12 +240,6 @@ void *server_listen(void *param){
 				}
 			}
 			send_all_message(s,send_message,send_message_size);
-
-			/* 
-			printf("liberamos memoria\n");
-  			free(recv_message);
-			free(send_message);
-			*/
 		}
 		close(s->fd_client);
 	}

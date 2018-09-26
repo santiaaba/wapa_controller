@@ -79,6 +79,12 @@ char *task_get_id(T_task *t){
 	return t->id;
 }
 
+void task_set_result(T_task *t, char *message){
+	t->result_size = strlen(message);
+	t->result=(char *)realloc(t->result,t->result_size);
+	strcpy(t->result,message);
+}
+
 void task_site_list(T_task *t, T_db *db){
 	/* Lista sitios de una suscripcion dada */
 	char *susc_id;
@@ -114,67 +120,119 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 	susc_id = dictionary_get(t->data,"susc_id");
 
 	/* Los tres valores anteriores no pueden ser vacio */
-	if(strcmp(susc_id,"") == 0){ return 0; }
-	if(strcmp(name,"") == 0){ return 0; }
+	//if(strcmp(susc_id,"") == 0){ return 0; }
+	//if(strcmp(name,"") == 0){ return 0; }
 
 	/* Verificamos que el sitio no exista ya con ese nombre */
 	printf("Verificamos si el sitio existe\n");
-	if(db_find_site(db,name)){ printf("NOOO\n"); return 0; }
+	if(db_find_site(db,name)){
+		task_set_result(t,"301|\"code\":\"301\",\"info\":\"Ya existe sitio con ese nombre\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
 
 	// Alta en la base de datos del sitio
 	printf("Alta a la base de datos\n");
-	if(!db_add_site(db,&newsite,name,atoi(susc_id),hash_dir)){ return 0; }
+	if(!db_add_site(db,&newsite,name,atoi(susc_id),hash_dir)){
+		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
 
 	// Creacion del espacio de almacenamiento
 	printf("Creacion de directorios\n");
 	sprintf(command,"mkdir -p /websites/%s/wwwroot",hash_dir);
-	if(system(command) != 0){ return 0; }
+	if(system(command) != 0){
+		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
 	sprintf(command,"mkdir -p /websites/%s/logs",hash_dir);
-	if(system(command) != 0){ return 0; }
+	if(system(command) != 0){
+		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
 
 	// Adicion del sitio a la lista
 	printf("agregado al listado\n");
 	list_site_add(l,newsite);
 
+	task_set_result(t,"200|\"code\":\"201\",\"info\":\"sitio agregado correctamente\"");
+	t->status = T_DONE_OK;
 	return 1;
 }
 
 int task_site_del(T_task *t, T_list_site *l, T_db *db){
+	/* Borra fisicamente y logicamente un sitio.
+ 	 * si pudo borrarlo retorna 1. Si no pudo o
+ 	 * fue borrado parcialmente retorna 0 */
 	char hash_dir[6];
 	char site_name[100];
 	char command[200];
 	char *site_id;
-	T_site *site;
+	T_site *site = NULL;
 	T_worker *worker;
 
 	printf("task_site_del\n");
 
-	/* Borra un sitio en particular */
-	dictionary_print(t->data);
+	//dictionary_print(t->data);
 	site_id = dictionary_get(t->data,"site_id");
-	if(strcmp(site_id,"") == 0){ return 0; }
+	//if(strcmp(site_id,"") == 0){return 0; }
 
-	/* Borramos de la base de datos */
-	if(!db_get_hash_dir(db,site_id,hash_dir,site_name)){ return 0; }
-	db_del_site(db,site_id);
+	if(!db_get_hash_dir(db,site_id,hash_dir,site_name)){
+		task_set_result(t,"301|\"code\":\"302\",\"info\":\"Imposible borrar. sitio no existe\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
+	/* Borramos de la base de datos el sitio, indices y alias*/
+	if(!db_del_site(db,site_id)){
+		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
 
 	/* Lo borramos logicamente y quitamos del apache */
 	site = list_site_find_id(l,atoi(site_id));
-	list_worker_first(site_get_workers(site));
-	while(!list_worker_eol(site_get_workers(site))){
-		worker = list_worker_get(site_get_workers(site));
-		worker_remove_site(worker,site);
-		list_worker_next(site_get_workers(site));
+	if(site){
+		/* Siempre deberiamos entrar por true. Pero...
+ 		 * si hay algún error donde site = NULL debemos tener
+ 		 * cuidado */
+		list_worker_first(site_get_workers(site));
+		while(!list_worker_eol(site_get_workers(site))){
+			worker = list_worker_get(site_get_workers(site));
+			worker_remove_site(worker,site);
+			list_worker_next(site_get_workers(site));
+		}
 	}
 
-	/* Lo borramos fisicamente */
+	/* Lo borramos fisicamente de la estructura de directorios */
 	sprintf(command,"rm -rf /websites/%s/%s",hash_dir,site_name);
-	if(system(command) != 0){ return 0; }
+	if(system(command) != 0){
+		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		t->status = T_DONE_ERROR;
+		return 0;
+	}
+
+	task_set_result(t,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
+	t->status = T_DONE_OK;
 	return 1;
 }
+int task_susc_add(T_task *t, T_db *db){
+	/* Agrega una suscripcion */
 
-int task_site_alldel(T_task *t, T_list_site *l, T_db *db){
-	/* Borra todos los sitios de una suscripcion */
+	char newid[50];
+
+	/* Agrega suscripcion a la base de datos */
+	if(db_susc_add(db,newid)){ lalala
+		t->status = T_DONE_ERROR;
+	} else {
+		t->status = T_DONE_OK;
+	}
+}
+
+int task_susc_del(T_task *t, T_list_site *l, T_db *db){
+	/* Elimina una suscripcion y todos sus datos */
 	/* Retorna 1 si pudo borrar todo. Caso contrario retorna 0 */
 	T_task *task_aux;
 	int ok=1;
@@ -185,12 +243,12 @@ int task_site_alldel(T_task *t, T_list_site *l, T_db *db){
 	int aux_size;
 
 	task_aux = (T_task *)malloc(sizeof(T_task));
-	dictionary_print(t->data);
+	//dictionary_print(t->data);
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
 		pos=0;
 		db_get_sites_id(db,susc_id,&aux,&aux_size);
-		while(pos<aux_size){
+		while(pos<aux_size && ok){
 			parce_data(aux,',',&pos,site_id);
 			dictionary_add(task_aux->data,"site_id",site_id);
 			ok &= task_site_del(task_aux,l,db);
@@ -199,6 +257,13 @@ int task_site_alldel(T_task *t, T_list_site *l, T_db *db){
 	}
 	free(task_aux);
 	free(aux);
+	if(ok){
+		task_set_result(t,"200|\"code\":\"202\",\"info\":\"Sitios borrados\"");
+		t->status = T_DONE_OK;
+	} else {
+		task_set_result(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		t->status = T_DONE_ERROR;
+	}
 	return ok;
 }
 
@@ -219,37 +284,57 @@ void task_worker_list(T_task *t, T_list_worker *l){
 
 void task_worker_show(T_task *t, T_list_worker *l){
 	char *id;
-	T_worker *worker;
+	T_worker *worker = NULL;
 
 	id = dictionary_get(t->data,"id");
 	worker = list_worker_find_id(l,atoi(id));
-	json_worker(&(t->result),&(t->result_size),worker);
+	if(worker){
+		json_worker(&(t->result),&(t->result_size),worker);
+	} else {
+		task_set_result(t,"\"code\":\"310\",\"info\":\"Worker no existe\"");
+	}
 }
 
 int task_worker_stop(T_task *t, T_list_worker *l, T_db *db){
 	/* Detenemos el worker y lo indicamos en
  	 * la base de datos */
-	int id = atoi(dictionary_get(t->data,"id"));
-	worker_stop(list_worker_find_id(l,id));
-	//db_worker_stop(db,id);
+	char *id;
+	T_worker *worker = NULL;
+
+	id = dictionary_get(t->data,"id");
+	worker = list_worker_find_id(l,atoi(id));
+	if(worker){
+		worker_stop(worker);
+	} else {
+		task_set_result(t,"\"code\":\"310\",\"info\":\"Worker no existe\"");
+	}
 }
 
 int task_worker_start(T_task *t, T_list_worker *l, T_db *db){
 	/* Arrancamos el worker y lo indicamos en
  	 * la base de datos */
-	int id = atoi(dictionary_get(t->data,"id"));
-	worker_start(list_worker_find_id(l,id));
-	//db_worker_start(db,id);
+	char *id;
+	T_worker *worker = NULL;
+
+	id = dictionary_get(t->data,"id");
+	worker = list_worker_find_id(l,atoi(id));
+	if(worker){
+		worker_start(worker);
+	} else {
+		task_set_result(t,"\"code\":\"310\",\"info\":\"Worker no existe\"");
+	}
 }
 
 T_task_type task_c_to_type(char c){
 	switch(c){
+		case '0': return T_SUSC_ADD;
+		case '1': return T_SUSC_DEL;
+
 		case 'l': return T_SITE_LIST;
 		case 's': return T_SITE_SHOW;
 		case 'a': return T_SITE_ADD;
 		case 'm': return T_SITE_MOD;
 		case 'd': return T_SITE_DEL;
-		case 'b': return T_SITE_ALLDEL;
 		case 'k': return T_SITE_STOP;
 		case 'e': return T_SITE_START;
 
@@ -270,6 +355,11 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 
 	printf("TASK_RUN\n");
 	switch(t->type){
+		case T_SUSC_ADD:
+			task_susc_del(t,db); break;
+		case T_SUSC_DEL:
+			task_susc_del(t,sites,db); break;
+
 		case T_SITE_LIST:
 			task_site_list(t,db); break;
 		case T_SITE_SHOW:
@@ -278,8 +368,6 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 			task_site_add(t,sites,db); break;
 		case T_SITE_DEL:
 			task_site_del(t,sites,db); break;
-		case T_SITE_ALLDEL:
-			task_site_alldel(t,sites,db); break;
 		case T_SITE_MOD:
 			task_site_mod(t,sites,db); break;
 		case T_SITE_STOP:
@@ -299,7 +387,6 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 			printf("ERROR FATAL. TASK_TYPE indefinido\n");
 
 	}
-	t->status = T_DONE;
 }
 
 /*****************************

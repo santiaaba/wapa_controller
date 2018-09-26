@@ -1,5 +1,22 @@
 #include "db.h"
 
+void random_dir(char *dir){
+	/* Genera un dir y sub dir de dos digitos cada uno */
+	char *string = "0123456789";
+	int i,j;
+
+	for(j=0;j<5;j++){
+		if(j==2){
+			dir[j]='/';
+		} else {
+			i = rand() % 10;
+			dir[j] = string[i];
+		}
+	}
+	dir[5]='\0';
+}
+
+
 void db_init(T_db *db){
 	db->con = mysql_init(NULL);
 }
@@ -123,7 +140,7 @@ int db_add_site(T_db *db, T_site **newsite, char *name, unsigned int susc_id, ch
 	unsigned int site_id;
 
 	sprintf(query,"insert into web_site(version,name,size,susc_id) values(1,\"%s\",1,%lu)",
-                name,susc_id,dir);
+		name,susc_id,dir);
 
 	mysql_query(db->con,query);
 	if ((result = mysql_store_result(db->con)) == 0 &&
@@ -166,14 +183,27 @@ void db_worker_start(T_db *db, int id){
 	mysql_query(db->con,query);
 }
 
+int db_susc_add(T_db *db, my_ulonglong susc_id){
+	char query[200];
+	char hash_dir[6];
+	MYSQL_RES *result;
+
+	random_dir(hash_dir);
+	sprintf("insert into web_suscription values (%lu,'%s')",susc_id,hash_dir);
+	if!(mysql_query(db->con,query)){ lalala
+		return 0;
+	}
+	return 1;
+}
+
 int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size){
 	char query[200];
-        MYSQL_RES *result;
-        MYSQL_ROW row;
+	MYSQL_RES *result;
+	MYSQL_ROW row;
 	
 	sprintf(query,"select id from web_site where susc_id=%c",susc_id);
 	printf("QEURY : %s\n",query);
-        mysql_query(db->con,query);
+	mysql_query(db->con,query);
 
 	*list_id_size=40;
 	*list_id = (char *)realloc(*list_id,*list_id_size);
@@ -197,16 +227,16 @@ void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 	char aux[max_c_site];
 	int real_size;
 	MYSQL_RES *result;
-        MYSQL_ROW row;
+	MYSQL_ROW row;
 
-        sprintf(query,"select id,name,status from web_site where susc_id =%s",susc_id);
+	sprintf(query,"select id,name,status from web_site where susc_id =%s",susc_id);
 	printf("DB_SITE_LIST: %s\n",query);
 	mysql_query(db->con,query);
 	result = mysql_store_result(db->con);
 
 	*data=(char *)realloc(*data,max_c_site);
 	real_size = max_c_site;
-	strcpy(*data,"[");
+	strcpy(*data,"200|[");
 	while(row = mysql_fetch_row(result)){
 		printf("Agregando\n");
 		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",row[0],row[1],row[2]);
@@ -237,7 +267,7 @@ void db_site_show(T_db *db, char **data, int *data_size, char *site_id){
 			printf("Allocamos memoria\n");
 			*data=(char *)realloc(*data,*data_size);
 			printf("colocamos info\n");
-			sprintf(*data,"{\"id\":\"%s\",\"version\":\"%s\",\"name\":\"%s\",\"size\":\"%s\",\"susc_id\":\"%s\",\"status\":\"%s\",\"urls\":[",
+			sprintf(*data,"200|{\"id\":\"%s\",\"version\":\"%s\",\"name\":\"%s\",\"size\":\"%s\",\"susc_id\":\"%s\",\"status\":\"%s\",\"urls\":[",
 				row[0],row[1],row[2],row[3],row[4],row[5]);
 	
 			/* Listado de alias */
@@ -298,10 +328,10 @@ int db_del_site(T_db *db, char *site_id){
 int db_del_all_site(T_db *db, char *susc_id){
 	char query[200];
 	MYSQL_RES *result;
-        MYSQL_ROW row;
+	MYSQL_ROW row;
 
 	sprintf(query,"select id from web_site where susc_id=%s",susc_id);
-        mysql_query(db->con,query);
+	mysql_query(db->con,query);
 	if(result = mysql_store_result(db->con)){
 		while(row = mysql_fetch_row(result)){
 			db_del_site(db,row[0]);
@@ -315,10 +345,10 @@ int db_del_all_site(T_db *db, char *susc_id){
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name){
 	char query[200];
 	MYSQL_RES *result;
-        MYSQL_ROW row;
+	MYSQL_ROW row;
 
 	sprintf(query,"select name,hash_dir from web_site s inner join web_suscription u on (s.susc_id = u.id) where s.id=%s", site_id);
-        mysql_query(db->con,query);
+	mysql_query(db->con,query);
 	if(result = mysql_store_result(db->con)){
 		if(row = mysql_fetch_row(result)){
 			strcpy(hash_dir,row[1]);
