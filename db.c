@@ -1,5 +1,9 @@
 #include "db.h"
 
+/********************************
+ * 	Funciones varias	*
+ ********************************/
+
 void random_dir(char *dir){
 	/* Genera un dir y sub dir de dos digitos cada uno */
 	char *string = "0123456789";
@@ -16,6 +20,29 @@ void random_dir(char *dir){
 	dir[5]='\0';
 }
 
+int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name){
+	char query[200];
+	MYSQL_RES *result;
+	MYSQL_ROW row;
+
+	sprintf(query,"select name,hash_dir from web_site s inner join web_suscription u on (s.susc_id = u.id) where s.id=%s", site_id);
+	mysql_query(db->con,query);
+	if(result = mysql_store_result(db->con)){
+		if(row = mysql_fetch_row(result)){
+			strcpy(hash_dir,row[1]);
+			strcpy(site_name,row[0]);
+			return 1;
+		} else {
+			return 0;
+		}
+	} else {
+		return 0;
+	}
+}
+
+/********************************
+ * 	Funciones DB		*
+ ********************************/
 
 void db_init(T_db *db){
 	db->con = mysql_init(NULL);
@@ -59,6 +86,8 @@ int db_find_site(T_db *db, char *name){
 		return 1;
 	}
 }
+
+/****	Funciones de carga	****/
 
 void db_load_sites(T_db *db, T_list_site *l){
 	char query[200];
@@ -128,7 +157,23 @@ void db_load_proxys(T_db *db, T_list_proxy *l){
 	}
 }
 
-int db_add_site(T_db *db, T_site **newsite, char *name, unsigned int susc_id, char *dir){
+/****	Funciones para suscripciones	****/
+
+int db_susc_add(T_db *db, my_ulonglong susc_id){
+	char query[200];
+	char hash_dir[6];
+
+	random_dir(hash_dir);
+	sprintf(query,"insert into web_suscription values (%lu,'%s')",susc_id,hash_dir);
+	if(!mysql_query(db->con,query)){
+		return 0;
+	}
+	return 1;
+}
+
+/****	Funciones para sitios	****/
+
+int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id, char *dir){
 	/* Agrega un sitio a la base de datos.
  	 * Si no pudo hacerlo retorna 0 sino 1
 	 * En el parametro dir retorna el directorio
@@ -167,36 +212,9 @@ int db_add_site(T_db *db, T_site **newsite, char *name, unsigned int susc_id, ch
 	return 1;
 }
 
-void db_worker_stop(T_db *db, int id){
-	char query[200];
-
-	sprintf(query,"update web_worker set status=1 where id=%i",id);
-	printf("QEURY : %s\n",query);
-	mysql_query(db->con,query);
-}
-
-void db_worker_start(T_db *db, int id){
-	char query[200];
-
-	sprintf(query,"update web_worker set status=0 where id=%i",id);
-	printf("QEURY : %s\n",query);
-	mysql_query(db->con,query);
-}
-
-int db_susc_add(T_db *db, my_ulonglong susc_id){
-	char query[200];
-	char hash_dir[6];
-	MYSQL_RES *result;
-
-	random_dir(hash_dir);
-	sprintf("insert into web_suscription values (%lu,'%s')",susc_id,hash_dir);
-	if!(mysql_query(db->con,query)){ lalala
-		return 0;
-	}
-	return 1;
-}
-
 int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size){
+	/* Retorna los sitios que posee una suscripcion dado el id
+ 	 * de la misma pasado por parametro */
 	char query[200];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
@@ -220,9 +238,10 @@ int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size){
 }
 
 void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
-	/* Lo retornamos en formato json */
+	/* Retorna en formato json la lista de sitios dado el id de
+ 	 * una suscripcion pasado por parametro */
+
 	const int max_c_site=300; //Los datos de un solo sitio no deben superar este valor
-	
 	char query[200];
 	char aux[max_c_site];
 	int real_size;
@@ -251,14 +270,16 @@ void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 	*data_size = real_size;
 }
 
-void db_site_show(T_db *db, char **data, int *data_size, char *site_id){
+void db_site_show(T_db *db, char **data, int *data_size, char *site_id, char *susc_id){
+	/* Retorna en formato json los datos de un sitio dado
+ 	 * en base al id pasado por parametro */
 
 	char query[200];
 	char aux[500];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
-	sprintf(query,"select * from web_site where id =%s",site_id);
+	sprintf(query,"select * from web_site where id =%s and susc_id=%s",site_id,susc_id);
 	printf("DB_SITE_LIST: %s\n",query);
 	mysql_query(db->con,query);
 	if(result = mysql_store_result(db->con)){
@@ -302,17 +323,20 @@ void db_site_show(T_db *db, char **data, int *data_size, char *site_id){
 	strcat(*data,"}");
 }
 
-int db_del_site(T_db *db, char *site_id){
+int db_site_del(T_db *db, char *site_id){
+	/* Elimina un sitio y todas sus componentes
+	   de la base de datos dado el id */
+
 	char query[200];
 
 	/* Borramos alias */
 	sprintf(query,"delete from web_alias where site_id=%s",site_id);
-	printf("db_del_site: %s\n",query);
+	printf("db_site_del: %s\n",query);
 	mysql_query(db->con,query);
 
 	/* Borramos indices */
 	sprintf(query,"delete from web_indexes where site_id=%s",site_id);
-	printf("db_del_site: %s\n",query);
+	printf("db_site_del: %s\n",query);
 	mysql_query(db->con,query);
 
 	/* Borrar entradas del ftp */
@@ -320,12 +344,14 @@ int db_del_site(T_db *db, char *site_id){
 
 	/* Borramos sitio */
 	sprintf(query,"delete from web_site where id=%s",site_id);
-	printf("db_del_site: %s\n",query);
+	printf("db_site_del: %s\n",query);
 	mysql_query(db->con,query);
 	return 1;
 }
 
 int db_del_all_site(T_db *db, char *susc_id){
+	/* Elimina todos los sitios de una suscripcion
+ 	 *  dado el id de la misma */
 	char query[200];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
@@ -334,7 +360,7 @@ int db_del_all_site(T_db *db, char *susc_id){
 	mysql_query(db->con,query);
 	if(result = mysql_store_result(db->con)){
 		while(row = mysql_fetch_row(result)){
-			db_del_site(db,row[0]);
+			db_site_del(db,row[0]);
 		}
 	} else {
 		return 0;
@@ -342,22 +368,22 @@ int db_del_all_site(T_db *db, char *susc_id){
 	return 1;
 }
 
-int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name){
-	char query[200];
-	MYSQL_RES *result;
-	MYSQL_ROW row;
+/****	Funciones para workers	****/
 
-	sprintf(query,"select name,hash_dir from web_site s inner join web_suscription u on (s.susc_id = u.id) where s.id=%s", site_id);
+void db_worker_stop(T_db *db, int id){
+	/* Deja constancia en la base de datos del worker
+ 	 * detenido dado el id del mismo */
+	char query[200];
+	sprintf(query,"update web_worker set status=1 where id=%i",id);
+	printf("QEURY : %s\n",query);
 	mysql_query(db->con,query);
-	if(result = mysql_store_result(db->con)){
-		if(row = mysql_fetch_row(result)){
-			strcpy(hash_dir,row[1]);
-			strcpy(site_name,row[0]);
-			return 1;
-		} else {
-			return 0;
-		}
-	} else {
-		return 0;
-	}
+}
+
+void db_worker_start(T_db *db, int id){
+	/* Deja constancia en la base de datos del worker
+ 	 * iniciado dado el id del mismo */
+	char query[200];
+	sprintf(query,"update web_worker set status=0 where id=%i",id);
+	printf("QEURY : %s\n",query);
+	mysql_query(db->con,query);
 }

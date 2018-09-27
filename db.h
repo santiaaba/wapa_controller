@@ -25,9 +25,10 @@ void db_load_proxys(T_db *db, T_list_proxy *l);
 
 /* Para los sitios */
 int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size);
-int db_add_site(T_db *db, T_site **newsite, char *name, unsigned int susc_id, char *dir);
+int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id, char *dir);
 void db_site_list(T_db *db, char **data, int *data_size, char *susc_id);
-int db_del_site(T_db *db, char *site_id);
+int db_site_del(T_db *db, char *site_id);
+void db_site_show(T_db *db, char **data, int *data_size, char *site_id, char *susc_id);
 int db_del_all_site(T_db *db, char *susc_id);
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name);
 

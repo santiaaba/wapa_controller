@@ -24,22 +24,6 @@ void random_token(T_tasktoken value){
 	value[TOKEN_SIZE] = '\0';
 }
 
-void random_dir(char *dir){
-	/* Genera un dir y sub dir de dos digitos cada uno */
-	char *string = "0123456789";
-	int i,j;
-
-	for(j=0;j<5;j++){
-		if(j==2){
-			dir[j]='/';
-		} else {
-			i = rand() % 10;
-			dir[j] = string[i];
-		}
-	}
-	dir[5]='\0';
-}
-
 /*****************************
 	     TASK 
 ******************************/
@@ -79,7 +63,8 @@ char *task_get_id(T_task *t){
 	return t->id;
 }
 
-void task_set_result(T_task *t, char *message){
+void task_set_result(T_task *t, T_task_status status, char *message){
+	t->status = status;
 	t->result_size = strlen(message);
 	t->result=(char *)realloc(t->result,t->result_size);
 	strcpy(t->result,message);
@@ -96,11 +81,13 @@ void task_site_list(T_task *t, T_db *db){
 }
 
 void task_site_show(T_task *t, T_db *db){
-	char *id;
+	char *site_id;
+	char *susc_id;
 	T_site *site;
 
-	id = dictionary_get(t->data,"site_id");
-	db_site_show(db,&(t->result),&(t->result_size),id);
+	site_id = dictionary_get(t->data,"site_id");
+	susc_id = dictionary_get(t->data,"susc_id");
+	db_site_show(db,&(t->result),&(t->result_size),site_id,susc_id);
 }
 
 int task_site_add(T_task *t, T_list_site *l, T_db *db){
@@ -126,16 +113,14 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 	/* Verificamos que el sitio no exista ya con ese nombre */
 	printf("Verificamos si el sitio existe\n");
 	if(db_find_site(db,name)){
-		task_set_result(t,"301|\"code\":\"301\",\"info\":\"Ya existe sitio con ese nombre\"");
-		t->status = T_DONE_ERROR;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"301\",\"info\":\"Ya existe sitio con ese nombre\"");
 		return 0;
 	}
 
 	// Alta en la base de datos del sitio
 	printf("Alta a la base de datos\n");
-	if(!db_add_site(db,&newsite,name,atoi(susc_id),hash_dir)){
-		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		t->status = T_DONE_ERROR;
+	if(!db_site_add(db,&newsite,name,atoi(susc_id),hash_dir)){
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
 
@@ -143,14 +128,12 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 	printf("Creacion de directorios\n");
 	sprintf(command,"mkdir -p /websites/%s/wwwroot",hash_dir);
 	if(system(command) != 0){
-		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		t->status = T_DONE_ERROR;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
 	sprintf(command,"mkdir -p /websites/%s/logs",hash_dir);
 	if(system(command) != 0){
-		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		t->status = T_DONE_ERROR;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
 
@@ -158,8 +141,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db){
 	printf("agregado al listado\n");
 	list_site_add(l,newsite);
 
-	task_set_result(t,"200|\"code\":\"201\",\"info\":\"sitio agregado correctamente\"");
-	t->status = T_DONE_OK;
+	task_set_result(t,T_DONE_OK,"200|\"code\":\"201\",\"info\":\"sitio agregado correctamente\"");
 	return 1;
 }
 
@@ -181,14 +163,12 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db){
 	//if(strcmp(site_id,"") == 0){return 0; }
 
 	if(!db_get_hash_dir(db,site_id,hash_dir,site_name)){
-		task_set_result(t,"301|\"code\":\"302\",\"info\":\"Imposible borrar. sitio no existe\"");
-		t->status = T_DONE_ERROR;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"302\",\"info\":\"Imposible borrar. sitio no existe\"");
 		return 0;
 	}
 	/* Borramos de la base de datos el sitio, indices y alias*/
-	if(!db_del_site(db,site_id)){
-		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		t->status = T_DONE_ERROR;
+	if(!db_site_del(db,site_id)){
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
 
@@ -209,13 +189,11 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db){
 	/* Lo borramos fisicamente de la estructura de directorios */
 	sprintf(command,"rm -rf /websites/%s/%s",hash_dir,site_name);
 	if(system(command) != 0){
-		task_set_result(t,"301|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		t->status = T_DONE_ERROR;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
 
-	task_set_result(t,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
-	t->status = T_DONE_OK;
+	task_set_result(t,T_DONE_OK,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
 	return 1;
 }
 int task_susc_add(T_task *t, T_db *db){
@@ -224,10 +202,10 @@ int task_susc_add(T_task *t, T_db *db){
 	char newid[50];
 
 	/* Agrega suscripcion a la base de datos */
-	if(db_susc_add(db,newid)){ lalala
-		t->status = T_DONE_ERROR;
+	if(db_susc_add(db,newid)){
+		task_set_result(t,T_DONE_OK,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
 	} else {
-		t->status = T_DONE_OK;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 	}
 }
 
@@ -258,11 +236,9 @@ int task_susc_del(T_task *t, T_list_site *l, T_db *db){
 	free(task_aux);
 	free(aux);
 	if(ok){
-		task_set_result(t,"200|\"code\":\"202\",\"info\":\"Sitios borrados\"");
-		t->status = T_DONE_OK;
+		task_set_result(t,T_DONE_OK,"200|\"code\":\"202\",\"info\":\"Sitios borrados\"");
 	} else {
-		task_set_result(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		t->status = T_DONE_ERROR;
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 	}
 	return ok;
 }
@@ -291,7 +267,7 @@ void task_worker_show(T_task *t, T_list_worker *l){
 	if(worker){
 		json_worker(&(t->result),&(t->result_size),worker);
 	} else {
-		task_set_result(t,"\"code\":\"310\",\"info\":\"Worker no existe\"");
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"310\",\"info\":\"Worker no existe\"");
 	}
 }
 
@@ -306,7 +282,7 @@ int task_worker_stop(T_task *t, T_list_worker *l, T_db *db){
 	if(worker){
 		worker_stop(worker);
 	} else {
-		task_set_result(t,"\"code\":\"310\",\"info\":\"Worker no existe\"");
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"310\",\"info\":\"Worker no existe\"");
 	}
 }
 
@@ -321,7 +297,7 @@ int task_worker_start(T_task *t, T_list_worker *l, T_db *db){
 	if(worker){
 		worker_start(worker);
 	} else {
-		task_set_result(t,"\"code\":\"310\",\"info\":\"Worker no existe\"");
+		task_set_result(t,T_DONE_ERROR,"300|\"code\":\"310\",\"info\":\"Worker no existe\"");
 	}
 }
 
@@ -356,7 +332,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 	printf("TASK_RUN\n");
 	switch(t->type){
 		case T_SUSC_ADD:
-			task_susc_del(t,db); break;
+			task_susc_add(t,db); break;
 		case T_SUSC_DEL:
 			task_susc_del(t,sites,db); break;
 
