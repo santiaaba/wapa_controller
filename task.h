@@ -7,8 +7,8 @@
 #include "db.h"
 #include <time.h>
 
-#ifndef JOB_H
-#define JOB_H
+#ifndef TASK_H
+#define TASK_H
 
 #define TOKEN_SIZE		25
 #define TASKID_SIZE		25
@@ -41,8 +41,7 @@ typedef enum {
 
 typedef enum { T_WHAITING,
 		T_RUNNING,
-		T_DONE_OK,
-		T_DONE_ERROR
+		T_DONE,
 } T_task_status;
 
 typedef enum {
@@ -75,7 +74,7 @@ T_task_type task_c_to_type(char c);
 void task_init(T_task *t, T_task_type type, T_dictionary *data);
 void task_destroy(T_task **t);
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers, T_list_proxy *proxys,T_db *db);
-void task_set_result(T_task *t, T_task_status status, char *message);
+void task_done(T_task *t, char *message);
 char *task_get_token(T_task *t);
 char *task_get_id(T_task *t);
 char *task_get_result(T_task *t);

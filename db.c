@@ -69,16 +69,15 @@ int db_find_site(T_db *db, char *name){
 
 	char query[200];
 	int resultado;
-	MYSQL_ROW row;
 
-	sprintf(query,"select count(*) from web_site where name='%s'",name);
+	sprintf(query,"select name from web_site where name='%s'",name);
 	printf("Pasamos 1: %s\n",query);
 	mysql_query(db->con,query);
 	printf("Pasamos 2\n");
 	MYSQL_RES *result = mysql_store_result(db->con);
 	printf("Pasamos 3\n");
 	row = mysql_fetch_row(result);
-	if(atoi(row[0]) == 0){
+	if(mysql_num_rows(result) == 0){
 		printf("Sitio no existe!!!\n");
 		return 0;
 	} else {
