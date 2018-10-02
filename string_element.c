@@ -18,6 +18,11 @@ unsigned int s_e_get_id(T_s_e *a){
 	return a->id;
 }
 
+void s_e_free(T_s_e **a){
+	free((*a)->name);
+	free(*a);
+}
+
 /*****************************
 	Lista de s_e
  ******************************/
@@ -93,4 +98,17 @@ T_s_e *list_s_e_remove(T_list_s_e *l){
 		free(aux);
 	}
 	return element;
+}
+
+void list_s_e_clean(T_list_s_e *l){
+	/* Vacia la lista eliminando sus elementos */
+	list_a_node *aux;
+	T_s_e *element;
+
+	while(l->first != NULL){
+		aux = l->first;
+		l->first = l->first->next;
+		l->size--;
+		s_e_free(&(aux->data));
+	}
 }

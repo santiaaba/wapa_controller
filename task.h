@@ -14,6 +14,8 @@
 #define TASKID_SIZE		25
 #define TASKRESULT_SIZE		200
 
+#define ERROR_FATAL		"300|\"code\":\"300\",\"info\":\"ERROR Fatal\""
+
 typedef enum {	
 		T_TASK_SHOW,
 
@@ -85,7 +87,7 @@ void task_site_list(T_task *t, T_db *db);
 void task_site_show(T_task *t, T_db *db);
 int task_site_add(T_task *t, T_list_site *l, T_db *db);
 int task_site_del(T_task *t, T_list_site *l, T_db *db);
-int task_site_mod(T_task *t, T_list_site *l, T_db *db);
+void task_site_mod(T_task *t, T_list_site *l, T_db *db);
 int task_site_stop(T_task *t, T_list_site *l, T_db *db);
 int task_site_start(T_task *t, T_list_site *l, T_db *db);
 

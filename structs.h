@@ -12,6 +12,7 @@
 #ifndef STRUCT_H
 #define STRUCT_H
 
+#define	SITE_MAX_SIZE	10
 #define ROLE_BUFFER_SIZE 25
 #define ROLE_HEADER_SIZE 8
 #define TIMEONLINE 20	//tiempo que debe estar en preparado para pasar a online. En segundos
@@ -55,6 +56,10 @@ unsigned int site_get_real_size(T_site *s);
 T_list_s_e *site_get_alias(T_site *s);
 T_list_s_e *site_get_indexes(T_site *s);
 T_site_status site_get_status(T_site *s);
+void site_update(T_site *s);
+
+void site_set_size(T_site *s, unsigned int size);
+void site_set_status(T_site *s, T_site_status status);
 
 /* Retorna la lista de workers */
 T_list_worker *site_get_workers(T_site *s);
@@ -95,7 +100,7 @@ T_list_site *worker_get_sites(T_worker *w);
 
 /* Agrega un sitio al worker. Esto implica agregarlo tambien
  * al worker fisico */
-int worker_add_site(T_worker *w, T_site *s,char *default_domain);
+int worker_add_site(T_worker *w, T_site *s);
 
 int worker_remove_site(T_worker *w, T_site *s);
 
@@ -251,6 +256,8 @@ int list_site_eol(T_list_site *l);
  * El puntero queda apuntado al elemento siguente */
 T_site *list_site_remove(T_list_site *l);
 
+/* Remueve logicamente el elemento con id indicado.
+ * El puntero queda apuntado al elemento siguente */
 T_site *list_site_remove_id(T_list_site *l, unsigned int id);
 
 /* retorna el elemento solicitado por su id. NULL si no existe*/

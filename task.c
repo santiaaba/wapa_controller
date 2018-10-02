@@ -246,19 +246,48 @@ int task_site_stop(T_task *t, T_list_site *l, T_db *db){
 int task_site_start(T_task *t, T_list_site *l, T_db *db){
 }
 
-int task_site_mod(T_task *t, T_list_site *l, T_db *db){
+void task_site_mod(T_task *t, T_list_site *l, T_db *db){
 	/* Modifica un sitio */
 
 	char *site_id;
 	char *susc_id;
+	T_site *site;
+	int db_fail;
+	uint16_t version;
+	char error[200];
+	char aux[40];
 
 	printf("Modificamos un sitio\n");
         dictionary_print(t->data);
-        site_id = dictionary_get(t->data,"site_id");
-        susc_id = dictionary_get(t->data,"susc_id");
 
 	/* Verificamos que el sitio corresponda al suscriber_id */
-	/* modificamos el sitio */
+	version = db_exist_site(db,t->data,&db_fail);
+	if(!version){
+		if(db_fail){
+			task_done(t,ERROR_FATAL);
+		} else {
+			task_done(t,"300|\"code\":\"302\",\"info\":\"Sitio no existe\"");
+		}
+		return;
+	}
+	/* Verificamos que el sitio exista en las estructuras */
+	site = list_site_find_id(l,atoi(dictionary_get(t->data,"site_id")));
+	if(!site){
+		task_done(t,ERROR_FATAL);
+		return;
+	}
+
+	sprintf(aux,"%lu",version);
+	dictionary_add(t->data,"version",aux);
+	/* modificamos el sitio en la base de datos */
+	if(!db_site_mod(db,site,t->data,error,&db_fail)){
+		if(db_fail)
+			task_done(t,ERROR_FATAL);
+		else{
+			task_done(t,error);
+		}
+	}
+	task_done(t,"200|\"code\":\"203\",\"info\":\"Sitio modificado\"");
 }
 
 void task_worker_list(T_task *t, T_list_worker *l){

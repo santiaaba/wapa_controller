@@ -76,7 +76,6 @@ int db_find_site(T_db *db, char *name){
 	printf("Pasamos 2\n");
 	MYSQL_RES *result = mysql_store_result(db->con);
 	printf("Pasamos 3\n");
-	row = mysql_fetch_row(result);
 	if(mysql_num_rows(result) == 0){
 		printf("Sitio no existe!!!\n");
 		return 0;
@@ -86,9 +85,89 @@ int db_find_site(T_db *db, char *name){
 	}
 }
 
+uint16_t  db_exist_site(T_db *db, T_dictionary *d, int *db_fail){
+	/* Si el sitio existe retorna su version. Si retorna 0 es porque
+ 	   no existe */
+	char query[200];
+	int resultado;
+	MYSQL_RES *result;
+
+	sprintf(query,"select id from web_site where id=%s and susc_id=%s",
+	dictionary_get(d,"site_id"),dictionary_get(d,"susc_id"));
+	mysql_query(db->con,query);
+	result = mysql_store_result(db->con);
+	if(!result){
+		*db_fail = 1;
+		return 0;
+	} else {
+		*db_fail = 0;
+		if(mysql_num_rows(result) > 0){
+			printf("Sitio existe!!!\n");
+			return 1;
+		} else {
+			printf("Sitio EXISTE!!!\n");
+			return 0;
+		}
+	}
+}
+
 /****	Funciones de carga	****/
 
-void db_load_sites(T_db *db, T_list_site *l){
+int db_load_site_index(T_db *db, T_site *site, char *error, int *db_fail){
+	/* Carga los indices de un sitio. Previamente vacia la estructura lista_s_e */
+	char query[200];
+	MYSQL_RES *result;
+	MYSQL_ROW row;
+	T_s_e *new_index;
+	
+	sprintf(query,"select id,name from web_indexes where site_id=%s\n",row[0]);
+	printf("Consulta para obtener los indices del sitio id %s: %s\n",row[0],query);
+	if(mysql_query(db->con,query)){
+		/* Ocurrio un error */
+		*db_fail = 1;
+	} else {
+		db_fail = 0;
+	}
+
+	list_s_e_clean(site_get_indexes(site));
+	result = mysql_store_result(db->con);
+	while ((row = mysql_fetch_row(result))){
+		printf("Agregando index %s\n",row[1]);
+		new_index = (T_s_e*)malloc(sizeof(T_s_e));
+		s_e_init(new_index,atoi(row[0]),row[1]);
+		list_s_e_add(site_get_indexes(site),new_index);
+	}
+	return 1;
+}
+
+int db_load_site_alias(T_db *db, T_site *site, char *error, int *db_fail){
+	/* Carga los alias de un sitio. Previamente vacia la estructura lista_s_e */
+	char query[200];
+	MYSQL_RES *result;
+	MYSQL_ROW row;
+	T_s_e *new_alias;
+	
+	sprintf(query,"select id,alias from web_alias where site_id=%s\n",row[0]);
+	printf("Consulta para obtener los alias del sitio id %s: %s\n",row[0],query);
+	if(mysql_query(db->con,query)){
+		/* Ocurrio un error */
+		*db_fail = 1;
+		return 0;
+	}
+
+	db_fail = 0;
+	list_s_e_clean(site_get_alias(site));
+	result = mysql_store_result(db->con);
+	while ((row = mysql_fetch_row(result))){
+		printf("Agregando alias %s\n",row[1]);
+		new_alias = (T_s_e*)malloc(sizeof(T_s_e));
+		s_e_init(new_alias,atoi(row[0]),row[1]);
+		list_s_e_add(site_get_alias(site),new_alias);
+	}
+	return 1;
+}
+
+int db_load_sites(T_db *db, T_list_site *l, char *error, int *db_fail){
 	char query[200];
 	MYSQL_ROW row, row_alias;
 	T_site *new_site;
@@ -96,64 +175,73 @@ void db_load_sites(T_db *db, T_list_site *l){
 
 	strcpy(query,"select s.id,name,hash_dir,version,size from web_site s inner join web_suscription p on (s.susc_id = p.id)");
 
-	mysql_query(db->con,query);
+	if(mysql_query(db->con,query)==0){
+		/* Ocurrio un error */
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
 	MYSQL_RES *result = mysql_store_result(db->con);
-
 	while ((row = mysql_fetch_row(result))){
 		new_site = (T_site*)malloc(sizeof(T_site));
-		
 		site_init(new_site,row[1],atoi(row[0]),row[2],atoi(row[3]),atoi(row[4]));
-
 		/* Cargamos los alias */
-		sprintf(query,"select id,alias from web_alias where site_id=%s\n",row[0]);
-		printf("Consulta para obtener los alias del sitio id %s: %s\n",row[0],query);
-		mysql_query(db->con,query);
-		MYSQL_RES *result_alias = mysql_store_result(db->con);
-		while ((row_alias = mysql_fetch_row(result_alias))){
-			printf("Agregando alias %s\n",row_alias[1]);
-			new_alias = (T_s_e*)malloc(sizeof(T_s_e));
-			s_e_init(new_alias,atoi(row_alias[0]),row_alias[1]);
-			list_s_e_add(site_get_alias(new_site),new_alias);
-		}
+		if(!db_load_site_alias(db, new_site, error, db_fail))
+			return 0;
+		/* Cargamos los indices */
+		if(!db_load_site_index(db, new_site, error, db_fail))
+			return 0;
+		/* Alta del sitio en la lista */
 		list_site_add(l,new_site);
 	}
 	printf("Terminamos load sites\n");
+	return 1;
 }
 
-void db_load_workers(T_db *db, T_list_worker *l){
+int db_load_workers(T_db *db, T_list_worker *l, char *error, int *db_fail){
 	char query[200];
 	MYSQL_ROW row;
 	T_worker *new_worker;
 
 	strcpy(query,"select * from web_worker");
 
-	mysql_query(db->con,query);
+	if(mysql_query(db->con,query)==0){
+		/* Ocurrio un error */
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
 	MYSQL_RES *result = mysql_store_result(db->con);
-
 	while ((row = mysql_fetch_row(result))){
 		new_worker = (T_worker*)malloc(sizeof(T_worker));
 		worker_init(new_worker,atoi(row[0]),row[1],row[2],atoi(row[3]));
 		list_worker_add(l,new_worker);
 	}
 	printf("Terminamos load workers\n");
+	return 1;
 }
 
-void db_load_proxys(T_db *db, T_list_proxy *l){
+int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail){
 	char query[200];
 	MYSQL_ROW row;
 	T_proxy *new_proxy;
 
 	strcpy(query,"select id,name,ipv4,status from web_proxy");
 
-	mysql_query(db->con,query);
+	if(mysql_query(db->con,query)==0){
+		/* Ocurrio un error */
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
 	MYSQL_RES *result = mysql_store_result(db->con);
-
 	while ((row = mysql_fetch_row(result))){
 		printf("Cargando Proxy %s\n",row[1]);
 		new_proxy = (T_proxy*)malloc(sizeof(T_proxy));
 		proxy_init(new_proxy,atoi(row[0]),row[1],row[2],atoi(row[3]));
 		list_proxy_add(l,new_proxy);
 	}
+	return 1;
 }
 
 /****	Funciones para suscripciones	****/
@@ -208,6 +296,127 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id, ch
 	} else {
 		return 0;
 	}
+	return 1;
+}
+
+int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fail){
+	/* Modifica un sitio. Si no puede retorna 0. Si puede 1. Si falla
+ 	   la conexion a la base de datos retorna db_fail = 1. Sino 0. Si
+	   retorna 0 y db_fail 0 entonces indica en error el motivo por el
+	   cual no pudo realizar la modificacion */
+	
+	/* Todo chequeo previo sobre si es legal modificar el sitio
+ 	   debe haberse realizado previamente fuera de esta funcion */
+
+	/* Si los datos no estan en *d es porque no se deben modificar */
+
+	char query[200];
+	char *aux;
+	int real_size;
+	int pos;
+
+	/* Modificamos configuracion del sitio */
+	aux = dictionary_get(d,"version");
+	if(!aux){
+		return 0;
+		strcpy(error,"FALTA VERSION");
+	}
+	strcpy(query,"update web_site set version= ");
+	strcat(query, aux);
+	aux = dictionary_get(d,"size");
+	if(aux){
+		strcat(query, " size=");
+		strcat(query,aux);
+	}
+	aux = dictionary_get(d,"status");
+	if(aux){
+		strcat(query, " status=");
+		strcat(query,aux);
+	}
+	strcat(query," where id= ");
+	strcat(query,dictionary_get(d,"site_id"));
+	printf("DB_SITE_MOD: %s\n",query);
+
+	if(mysql_query(db->con,query)){
+		/* Algo fallo */
+		*db_fail = 1;
+		return 0;
+	}
+	/* Cambios en la bse aplicados. Ahora se aplican al sitio */
+	aux = dictionary_get(d,"size");
+	if(aux)
+		site_set_size(site,atoi(aux));
+	aux = dictionary_get(d,"status");
+	if(aux)
+		site_set_size(site,atoi(aux));
+
+	/* Modificamos los indices */
+	if(dictionary_get(d,"index")){
+		sprintf(query,"delete from web_indexes where d=%s",dictionary_get(d,"site_id"));
+		printf("DB_SITE_MOD: %s\n",query);
+		if(mysql_query(db->con,query)){
+			/* Algo fallo */
+			*db_fail = 1;
+			return 0;
+		}
+		pos=0;
+		strcpy(query,"insert into web_indexes(site_id,name) values ");
+		real_size = strlen(dictionary_get(d,"index"));
+		while(pos < real_size){
+			parce_data(dictionary_get(d,"index"),',',&pos,aux);
+			strcat(query,"(");
+			strcat(query,dictionary_get(d,"site_id"));
+			strcat(query,",");
+			strcat(query,aux);
+			strcat(query,"),");
+		}
+		query[strlen(query)-1] = '\0';
+		printf("DB_SITE_MOD: %s\n",query);
+		if(mysql_query(db->con,query)){
+			/* Algo fallo */
+			*db_fail = 1;
+			return 0;
+		}
+	}
+	/* Ahora modificamos los indices en el sitio */
+	db_load_site_index(db,site,error,db_fail);
+	if(db_fail) return 0;
+	
+	/* Modificamos los alias */
+	if(dictionary_get(d,"alias")){
+		sprintf(query,"delete from web_alias where d=%s",dictionary_get(d,"site_id"));
+		printf("DB_SITE_MOD: %s\n",query);
+		if(mysql_query(db->con,query)){
+			/* Algo fallo */
+			*db_fail = 1;
+			return 0;
+		}
+		pos=0;
+		strcpy(query,"insert into web_alias(site_id,alias) values ");
+		real_size = strlen(dictionary_get(d,"alias"));
+		while(pos < real_size){
+			parce_data(dictionary_get(d,"alias"),',',&pos,aux);
+			strcat(query,"(");
+			strcat(query,dictionary_get(d,"site_id"));
+			strcat(query,",");
+			strcat(query,aux);
+			strcat(query,")");
+		}
+		printf("DB_SITE_MOD: %s\n",query);
+		if(mysql_query(db->con,query)){
+			/* Algo fallo */
+			*db_fail = 1;
+			return 0;
+		}
+	}
+	/* Ahora modificamos los alias en el sitio */
+	db_load_site_alias(db,site,error,db_fail);
+	if(db_fail) return 0;
+
+	/* Le indicamos al sitio que se actualice en los workers */
+	site_update(site);
+
+	*db_fail = 0;
 	return 1;
 }
 

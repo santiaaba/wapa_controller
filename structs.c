@@ -53,10 +53,6 @@ char *site_get_name(T_site *s){
 	return s->name;
 }
 
-void site_set_size(T_site *s, unsigned int size){
-	s->size = size;
-}
-
 unsigned int site_get_size(T_site *s){
 	return s->size;
 }
@@ -75,6 +71,29 @@ T_list_s_e *site_get_indexes(T_site *s){
 
 T_site_status site_get_status(T_site *s){
 	return s->status;
+}
+
+void site_set_size(T_site *s, unsigned int size){
+	if(size < SITE_MAX_SIZE){
+		s->size = size;
+	}
+}
+
+void site_set_status(T_site *s, T_site_status status){
+	s->status = status;
+}
+
+void site_update(T_site *s){
+	/* Le indica a los workers que deben actualziar la iformacion
+	 * del sitio */
+	T_worker *worker;
+
+	list_worker_first(site_get_workers(s));
+	while(!list_worker_eol(site_get_workers(s))){
+		worker = list_worker_get(site_get_workers(s));
+		worker_add_site(worker,s);
+		list_worker_next(site_get_workers(s));
+	}
 }
 
 /*****************************
@@ -270,7 +289,7 @@ int worker_check(T_worker *w){
 	}
 }
 
-int worker_add_site(T_worker *w, T_site *s,char *default_domain){
+int worker_add_site(T_worker *w, T_site *s){
 	/* Agrega fisica y logicamente un sitio a un worker.
 	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 

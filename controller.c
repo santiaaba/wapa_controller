@@ -127,7 +127,7 @@ int assign_workers(T_list_worker *candidates, T_list_proxy *proxys,
 	/* Agregamos el sitio a los workers */
 	while(!list_worker_eol(candidates)){
 		worker = list_worker_get(candidates);
-		if(worker_add_site(worker,site,config_default_domain(config)))
+		if(worker_add_site(worker,site))
 			cant++;
 		list_worker_next(candidates);
 	}
@@ -205,7 +205,7 @@ int balance_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *conf
 					/* El sitio no se encuentra en el worker de destino
  					   lo movemos */
 					worker_remove_site(wfirst,site);
-					worker_add_site(wlast, site,config_default_domain(config));
+					worker_add_site(wlast, site);
 					assign_proxys_site(proxys,site);
 					encontro=1;
 				}
@@ -372,6 +372,8 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers,
 void main(){
 
 	int changed;
+	int db_fail;
+	char error[200];
 
 	srand(time(NULL));
 
@@ -398,9 +400,12 @@ void main(){
 		exit(1);
 	}
 	/* Cargamos los datos de la base de datos */
-	db_load_sites(&db,&sites);
-	db_load_workers(&db,&workers);
-	db_load_proxys(&db,&proxys);
+	if(!db_load_sites(&db,&sites,error,&db_fail))
+		exit(1);
+	if(!db_load_workers(&db,&workers,error,&db_fail))
+		exit(1);
+	if(!db_load_proxys(&db,&proxys,error,&db_fail))
+		exit(1);
 
 	/* Imprimimos la lista de sitios */
 	printf("Imprimimos lista de sitios\n");
