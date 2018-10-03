@@ -1,16 +1,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 #include "structs.h"
 #include "db.h"
+#include "logs.h"
 #include "config.h"
-#include <pthread.h>
 #include "server.h"
 
 /********************************
  * 	Variables GLOBALES	*
  ********************************/
 T_config config;
+T_logs logs;
 T_list_worker workers;
 T_list_proxy proxys;
 T_list_site sites;
@@ -57,7 +59,7 @@ void assign_proxys_sites(T_list_proxy *proxys, T_list_site *sites){
 	printf("termino\n");
 }
 
-int init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys){
+void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys){
 	/* Al iniciar el controller, se encarga de sincronizar el mismo
 	   con los workers. Esto es... se obtiene de cada worker fisico W_ONLINE
 	   los sitios a los que responde y se cargan en el worker logico.
@@ -65,18 +67,16 @@ int init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys){
 
 	T_worker *worker;
 
+	logs_write(&logs,L_DEBUG,"INIT_SYNC: Iniciando sincronismo");
 	list_worker_first(workers);
 	while(!list_worker_eol(workers)){
 		worker = list_worker_get(workers);
-		printf("revisando worker %s\n", worker_get_name(worker));
 		worker_sync(worker,sites);
-		printf("Pasamos de worker------\n");
 		list_worker_next(workers);
 	}
 	/* Reconfiguramos todos los proxys */
 	assign_proxys_sites(proxys,sites);
-	
-	return 1;
+	logs_write(&logs,L_DEBUG,"INIT_SYNC: Fin sincronismo");
 }
 
 int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *site){
@@ -387,6 +387,14 @@ void main(){
 	printf("db_name : %s\n",config_db_name(&config));
 	printf("load_average : %i\n",config_load_average(&config));
 	printf("site_average : %i\n",config_sites_average(&config));
+	printf("log_file : %s\n",config_logs_file(&config));
+
+	/* Levantamos el archivo de logs */
+	if(!logs_init(&logs,config_logs_file(&config),config_logs_level(&config))){
+		printf("Imposible levantar el archivo de logs\n");
+		exit(1);
+	}
+	logs_write(&logs,L_INFO,"Start Controller");
 
 	/* Iniciamos estructuras */
 	list_worker_init(&workers);
@@ -396,23 +404,21 @@ void main(){
 	/* Conectamos contra la base de datos */
 	db_init(&db);
 	if (!db_connect(&db,&config)){
-		printf("Error coneccion a la base de datos: %s\n",db_error(&db));
+		logs_write(&logs,L_ERROR,"Error conexcion a la base de datos");
 		exit(1);
 	}
 	/* Cargamos los datos de la base de datos */
-	if(!db_load_sites(&db,&sites,error,&db_fail))
+	if(!db_load_sites(&db,&sites,error,&db_fail)){
+		logs_write(&logs,L_ERROR,"Error al cargar los sitios desde la base de datos");
 		exit(1);
-	if(!db_load_workers(&db,&workers,error,&db_fail))
+	}
+	if(!db_load_workers(&db,&workers,error,&db_fail)){
+		logs_write(&logs,L_ERROR,"Error al cargar los workers desde la base de datos");
 		exit(1);
-	if(!db_load_proxys(&db,&proxys,error,&db_fail))
+	}
+	if(!db_load_proxys(&db,&proxys,error,&db_fail)){
+		logs_write(&logs,L_ERROR,"Error al cargar los proxys desde la base de datos");
 		exit(1);
-
-	/* Imprimimos la lista de sitios */
-	printf("Imprimimos lista de sitios\n");
-	list_site_first(&sites);
-	while(!list_site_eol(&sites)){
-		printf("sitio cargado %s\n", site_get_name(list_site_get(&sites)));
-		list_site_next(&sites);
 	}
 
 	/* Sincronizamos con la información en workers y proxys */
@@ -427,6 +433,7 @@ void main(){
 
 	/* Comenzamos el loop del controller */
 	while(1){
+		sleep(1);
 		continue;
 		changed = 0;
 		server_lock(&server);

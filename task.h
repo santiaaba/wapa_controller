@@ -22,6 +22,8 @@ typedef enum {
 		T_SUSC_ADD,
 		T_SUSC_DEL,
 		T_SUSC_MOD,
+		T_SUSC_STOP,
+		T_SUSC_START,
 
 		T_SITE_LIST,
 		T_SITE_SHOW,

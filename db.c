@@ -85,15 +85,14 @@ int db_find_site(T_db *db, char *name){
 	}
 }
 
-uint16_t  db_exist_site(T_db *db, T_dictionary *d, int *db_fail){
+uint16_t  db_site_exist(T_db *db, char *susc_id, char *site_id, char *error, int *db_fail){
 	/* Si el sitio existe retorna su version. Si retorna 0 es porque
  	   no existe */
 	char query[200];
 	int resultado;
 	MYSQL_RES *result;
 
-	sprintf(query,"select id from web_site where id=%s and susc_id=%s",
-	dictionary_get(d,"site_id"),dictionary_get(d,"susc_id"));
+	sprintf(query,"select id from web_site where id=%s and susc_id=%s", site_id,susc_id);
 	mysql_query(db->con,query);
 	result = mysql_store_result(db->con);
 	if(!result){
@@ -102,10 +101,9 @@ uint16_t  db_exist_site(T_db *db, T_dictionary *d, int *db_fail){
 	} else {
 		*db_fail = 0;
 		if(mysql_num_rows(result) > 0){
-			printf("Sitio existe!!!\n");
 			return 1;
 		} else {
-			printf("Sitio EXISTE!!!\n");
+			strcpy(error,"Sitio no existe");
 			return 0;
 		}
 	}
@@ -310,6 +308,8 @@ int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fa
 
 	/* Si los datos no estan en *d es porque no se deben modificar */
 
+	/* Es estado es un atributo que tiene su propia funcion (db_site_status) */
+
 	char query[200];
 	char *aux;
 	int real_size;
@@ -326,11 +326,6 @@ int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fa
 	aux = dictionary_get(d,"size");
 	if(aux){
 		strcat(query, " size=");
-		strcat(query,aux);
-	}
-	aux = dictionary_get(d,"status");
-	if(aux){
-		strcat(query, " status=");
 		strcat(query,aux);
 	}
 	strcat(query," where id= ");
@@ -417,6 +412,21 @@ int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fa
 	site_update(site);
 
 	*db_fail = 0;
+	return 1;
+}
+
+int db_site_status(T_db *db, char *susc_id, char *site_id, char *status, char *error, int *db_fail){
+	/* Modifica el estado de un sitio */
+	char query[200];
+
+	if(!db_site_exist(db,susc_id,site_id,error,db_fail))
+		return 0;
+	sprintf(query,"update web_site set status=%c where user_id=%s", status,site_id);
+	if(mysql_query(db->con,query) != 0){
+		/* algo fallo */
+		*db_fail = 1;
+		return 0;
+	}
 	return 1;
 }
 

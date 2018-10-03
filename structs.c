@@ -96,6 +96,16 @@ void site_update(T_site *s){
 	}
 }
 
+void site_stop(T_site *s){
+	s->status = S_OFFLINE;
+	site_update(s);
+}
+
+void site_start(T_site *s){
+	s->status = S_ONLINE;
+	site_update(s);
+}
+
 /*****************************
 	 Workers
 ******************************/
@@ -305,8 +315,9 @@ int worker_add_site(T_worker *w, T_site *s){
 	printf("WORKER_ADD_SITE: Entro\n");
 	send_message_size = 100;
 	send_message = (char *)malloc(send_message_size);
-	sprintf(send_message,"A%lu|%s|%s|%i|",site_get_id(s),site_get_name(s),site_get_dir(s),
-	site_get_version(s));
+	sprintf(send_message,"A%lu|%s|%s|%i|%i",site_get_id(s),
+		site_get_name(s),site_get_dir(s),site_get_version(s),
+		site_get_status(s));
 
 	// Armar los alias
 	printf("WORKER_ADD_SITE: armamos alias\n");

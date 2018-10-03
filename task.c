@@ -216,7 +216,6 @@ int task_susc_del(T_task *t, T_list_site *l, T_db *db){
 	int aux_size;
 
 	task_aux = (T_task *)malloc(sizeof(T_task));
-	//dictionary_print(t->data);
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
 		pos=0;
@@ -238,19 +237,102 @@ int task_susc_del(T_task *t, T_list_site *l, T_db *db){
 	return ok;
 }
 
+void task_susc_stop(T_task *t, T_list_site *l, T_db *db){
+	/* Detiene todos los sitios de una suscripcion */
+	T_task *task_aux;
+	char *aux;
+	int aux_size;
+	char *susc_id;
+	char site_id[50];
+	int pos;
+	int ok;
+
+	task_aux = (T_task *)malloc(sizeof(T_task));
+	susc_id = dictionary_get(t->data,"susc_id");
+	if(strcmp(susc_id,"") != 0){
+		pos=0;
+		db_get_sites_id(db,susc_id,&aux,&aux_size);
+		while(pos<aux_size && ok){
+			parce_data(aux,',',&pos,site_id);
+			dictionary_add(task_aux->data,"site_id",site_id);
+			ok &= task_site_stop(task_aux,l,db);
+			dictionary_remove(task_aux->data,"site_id");
+		}
+	}
+	free(task_aux);
+}
 	
+void task_susc_start(T_task *t, T_list_site *l, T_db *db){
+	/* ARRANCA todos los sitios de una suscripcion */
+	T_task *task_aux;
+	char *aux;
+	int aux_size;
+	char *susc_id;
+	char site_id[50];
+	int pos;
+	int ok;
+
+	task_aux = (T_task *)malloc(sizeof(T_task));
+	susc_id = dictionary_get(t->data,"susc_id");
+	if(strcmp(susc_id,"") != 0){
+		pos=0;
+		db_get_sites_id(db,susc_id,&aux,&aux_size);
+		while(pos<aux_size && ok){
+			parce_data(aux,',',&pos,site_id);
+			dictionary_add(task_aux->data,"site_id",site_id);
+			ok &= task_site_start(task_aux,l,db);
+			dictionary_remove(task_aux->data,"site_id");
+		}
+	}
+	free(task_aux);
+
+}
 
 int task_site_stop(T_task *t, T_list_site *l, T_db *db){
+	/* Coloca un sitio offline */
+	char error[200];
+	int db_fail;
+	T_site *site;
+
+	if(!db_site_status(db,dictionary_get(t->data,"susc_id"),
+	   dictionary_get(t->data,"site_id"),
+	   dictionary_get(t->data,"status"),error,&db_fail)){
+		if(db_fail)
+			 task_done(t,ERROR_FATAL);
+		else
+			 task_done(t,error);
+		return 0;
+	}
+	/* Ya cambiado en la base de datos... procedemos */
+	site = list_site_find_id(l,atoi(dictionary_get(t->data,"site_id")));
+	site_stop(site);
+	return 1;
 }
 
 int task_site_start(T_task *t, T_list_site *l, T_db *db){
+	/* Coloca un sitio online */
+	char error[200];
+	int db_fail;
+	T_site *site;
+
+	if(!db_site_status(db,dictionary_get(t->data,"susc_id"),
+	   dictionary_get(t->data,"site_id"),
+	   dictionary_get(t->data,"status"),error,&db_fail)){
+		if(db_fail)
+			 task_done(t,ERROR_FATAL);
+		else
+			 task_done(t,error);
+		return 0;
+	}
+	/* Ya cambiado en la base de datos... procedemos */
+	site = list_site_find_id(l,atoi(dictionary_get(t->data,"site_id")));
+	site_start(site);
+	return 1;
 }
 
 void task_site_mod(T_task *t, T_list_site *l, T_db *db){
 	/* Modifica un sitio */
 
-	char *site_id;
-	char *susc_id;
 	T_site *site;
 	int db_fail;
 	uint16_t version;
@@ -261,7 +343,8 @@ void task_site_mod(T_task *t, T_list_site *l, T_db *db){
         dictionary_print(t->data);
 
 	/* Verificamos que el sitio corresponda al suscriber_id */
-	version = db_exist_site(db,t->data,&db_fail);
+	version = db_site_exist(db,dictionary_get(t->data,"susc_id"),
+		dictionary_get(t->data,"site_id"),error,&db_fail);
 	if(!version){
 		if(db_fail){
 			task_done(t,ERROR_FATAL);
@@ -341,6 +424,8 @@ T_task_type task_c_to_type(char c){
 	switch(c){
 		case '0': return T_SUSC_ADD;
 		case '1': return T_SUSC_DEL;
+		case '2': return T_SUSC_STOP;
+		case '3': return T_SUSC_START;
 
 		case 'l': return T_SITE_LIST;
 		case 's': return T_SITE_SHOW;
@@ -371,6 +456,10 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 			task_susc_add(t,db); break;
 		case T_SUSC_DEL:
 			task_susc_del(t,sites,db); break;
+		case T_SUSC_STOP:
+			task_susc_stop(t,sites,db); break;
+		case T_SUSC_START:
+			task_susc_start(t,sites,db); break;
 
 		case T_SITE_LIST:
 			task_site_list(t,db); break;

@@ -17,7 +17,7 @@
 #define ROLE_HEADER_SIZE 8
 #define TIMEONLINE 20	//tiempo que debe estar en preparado para pasar a online. En segundos
 
-typedef enum { S_ONLINE, S_OFFLINE} T_site_status;
+typedef enum { S_OFFLINE, S_ONLINE} T_site_status;
 typedef enum { W_ONLINE, W_OFFLINE, W_PREPARED, W_BROKEN, W_UNKNOWN} T_worker_status;
 typedef enum { P_ONLINE, P_OFFLINE, P_PREPARED, P_BROKEN, P_UNKNOWN} T_proxy_status;
 
@@ -57,6 +57,8 @@ T_list_s_e *site_get_alias(T_site *s);
 T_list_s_e *site_get_indexes(T_site *s);
 T_site_status site_get_status(T_site *s);
 void site_update(T_site *s);
+void site_stop(T_site *s);
+void site_start(T_site *s);
 
 void site_set_size(T_site *s, unsigned int size);
 void site_set_status(T_site *s, T_site_status status);
