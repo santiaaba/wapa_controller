@@ -93,21 +93,6 @@ char *task_get_result(T_task *t);
 
 void task_show(T_task *t);
 
-/*
-void task_site_list(T_task *t, T_db *db);
-void task_site_show(T_task *t, T_db *db);
-int task_site_add(T_task *t, T_list_site *l, T_db *db);
-int task_site_del(T_task *t, T_list_site *l, T_db *db);
-void task_site_mod(T_task *t, T_list_site *l, T_db *db);
-int task_site_stop(T_task *t, T_list_site *l, T_db *db);
-int task_site_start(T_task *t, T_list_site *l, T_db *db);
-
-void task_worker_list(T_task *t, T_list_worker *l);
-void task_worker_show(T_task *t, T_list_worker *l);
-int task_worker_stop(T_task *t, T_list_worker *l, T_db *db);
-int task_worker_start(T_task *t, T_list_worker *l, T_db *db);
-*/
-
 /*****************************
          Cola de tareas
 ******************************/
