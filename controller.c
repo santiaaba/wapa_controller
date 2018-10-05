@@ -59,7 +59,7 @@ void assign_proxys_sites(T_list_proxy *proxys, T_list_site *sites){
 	printf("termino\n");
 }
 
-void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys){
+void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys, T_logs *logs){
 	/* Al iniciar el controller, se encarga de sincronizar el mismo
 	   con los workers. Esto es... se obtiene de cada worker fisico W_ONLINE
 	   los sitios a los que responde y se cargan en el worker logico.
@@ -67,7 +67,7 @@ void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys)
 
 	T_worker *worker;
 
-	logs_write(&logs,L_DEBUG,"INIT_SYNC: Iniciando sincronismo");
+	logs_write(logs,L_DEBUG,"INIT_SYNC:","Iniciando sincronismo");
 	list_worker_first(workers);
 	while(!list_worker_eol(workers)){
 		worker = list_worker_get(workers);
@@ -76,7 +76,7 @@ void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys)
 	}
 	/* Reconfiguramos todos los proxys */
 	assign_proxys_sites(proxys,sites);
-	logs_write(&logs,L_DEBUG,"INIT_SYNC: Fin sincronismo");
+	logs_write(logs,L_DEBUG,"INIT_SYNC:","Fin sincronismo");
 }
 
 int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *site){
@@ -394,7 +394,7 @@ void main(){
 		printf("Imposible levantar el archivo de logs\n");
 		exit(1);
 	}
-	logs_write(&logs,L_INFO,"Start Controller");
+	logs_write(&logs,L_INFO,"Start Controller","");
 
 	/* Iniciamos estructuras */
 	list_worker_init(&workers);
@@ -404,31 +404,31 @@ void main(){
 	/* Conectamos contra la base de datos */
 	db_init(&db);
 	if (!db_connect(&db,&config)){
-		logs_write(&logs,L_ERROR,"Error conexcion a la base de datos");
+		logs_write(&logs,L_ERROR,"Error conexcion a la base de datos","");
 		exit(1);
 	}
 	/* Cargamos los datos de la base de datos */
-	if(!db_load_sites(&db,&sites,error,&db_fail)){
-		logs_write(&logs,L_ERROR,"Error al cargar los sitios desde la base de datos");
+	if(!db_load_sites(&db,&sites,error,&db_fail,&logs)){
+		logs_write(&logs,L_ERROR,"Error al cargar los sitios desde la base de datos","");
 		exit(1);
 	}
-	if(!db_load_workers(&db,&workers,error,&db_fail)){
-		logs_write(&logs,L_ERROR,"Error al cargar los workers desde la base de datos");
+	if(!db_load_workers(&db,&workers,error,&db_fail,&logs)){
+		logs_write(&logs,L_ERROR,"Error al cargar los workers desde la base de datos","");
 		exit(1);
 	}
-	if(!db_load_proxys(&db,&proxys,error,&db_fail)){
-		logs_write(&logs,L_ERROR,"Error al cargar los proxys desde la base de datos");
+	if(!db_load_proxys(&db,&proxys,error,&db_fail,&logs)){
+		logs_write(&logs,L_ERROR,"Error al cargar los proxys desde la base de datos","");
 		exit(1);
 	}
 
 	/* Sincronizamos con la información en workers y proxys */
 	printf("--INI Sincronizamos workers--\n");
-	init_sync(&workers,&sites,&proxys);
+	init_sync(&workers,&sites,&proxys,&logs);
 	reload_services(&workers,&proxys);
 	printf("--FIN Sincronizamos workers--\n");
 
 	/* Iniciamos el server REST para la API */
-	server_init(&server,&sites,&workers,&proxys,&db);
+	server_init(&server,&sites,&workers,&proxys,&db,&logs);
 	printf("El rest server posee puntero %p\n",server);
 
 	/* Comenzamos el loop del controller */

@@ -5,6 +5,7 @@
 #include "json.h"
 #include "dictionary.h"
 #include "db.h"
+#include "logs.h"
 #include <time.h>
 
 #ifndef TASK_H
@@ -76,15 +77,23 @@ typedef struct {
 T_task_type task_c_to_type(char c);
 
 void task_init(T_task *t, T_task_type type, T_dictionary *data);
+
 void task_destroy(T_task **t);
-void task_run(T_task *t, T_list_site *sites, T_list_worker *workers, T_list_proxy *proxys,T_db *db);
+
+void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
+	      T_list_proxy *proxys,T_db *db, T_logs *logs);
+
 void task_done(T_task *t, char *message);
+
 char *task_get_token(T_task *t);
+
 char *task_get_id(T_task *t);
+
 char *task_get_result(T_task *t);
 
 void task_show(T_task *t);
 
+/*
 void task_site_list(T_task *t, T_db *db);
 void task_site_show(T_task *t, T_db *db);
 int task_site_add(T_task *t, T_list_site *l, T_db *db);
@@ -97,7 +106,7 @@ void task_worker_list(T_task *t, T_list_worker *l);
 void task_worker_show(T_task *t, T_list_worker *l);
 int task_worker_stop(T_task *t, T_list_worker *l, T_db *db);
 int task_worker_start(T_task *t, T_list_worker *l, T_db *db);
-
+*/
 
 /*****************************
          Cola de tareas

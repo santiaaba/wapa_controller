@@ -25,6 +25,7 @@ typedef struct t_r_server {
 	T_list_site *sites;
         T_list_worker *workers;
         T_list_proxy *proxys;
+	T_logs *logs;
 	T_db *db;
 	struct sockaddr_in server;
         struct sockaddr_in client;
@@ -36,6 +37,6 @@ typedef struct t_r_server {
 extern T_server server;
 
 void server_init(T_server *s, T_list_site *sites, T_list_worker *workers,
-		 T_list_proxy *proxys, T_db *db);
+		 T_list_proxy *proxys, T_db *db, T_logs *logs);
 void server_lock(T_server *s);
 void server_unlock(T_server *s);
