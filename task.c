@@ -29,13 +29,11 @@ void random_token(T_tasktoken value){
 ******************************/
 void task_init(T_task *t, T_task_type type, T_dictionary *data){
 	random_task_id(t->id);
-	printf("TASK_INIT: ID: %s\n",t->id);
 	//random_token(t->token);
 	t->type = type;
 	t->data = data;
 	t->result = NULL;
 	t->result_size = 0;
-	printf("TASK_INIT: ID: %s\n",t->id);
 }
 
 void task_destroy(T_task **t){
@@ -199,14 +197,12 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	logs_write(logs,L_INFO,"task_site_del","Sitio borrado");
 	return 1;
 }
-int task_susc_add(T_task *t, T_db *db){
+int task_susc_add(T_task *t, T_db *db, T_logs *logs){
 	/* Agrega una suscripcion */
+	int db_fail;
 
-	char newid[50];
-
-	/* Agrega suscripcion a la base de datos */
-	if(db_susc_add(db,newid)){
-		task_done(t,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
+	if(db_susc_add(db,dictionary_get(t->data,"susc_id"),&db_fail,logs)){
+		task_done(t,"200|\"code\":\"202\",\"info\":\"Suscripcion Agregada\"");
 	} else {
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 	}
@@ -458,10 +454,10 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 	/* Ejecuta el JOB */
 	t->status = T_RUNNING;
 
-	printf("TASK_RUN\n");
+	printf("TASK_RUN: %i\n",t->type);
 	switch(t->type){
 		case T_SUSC_ADD:
-			task_susc_add(t,db); break;
+			task_susc_add(t,db,logs); break;
 		case T_SUSC_DEL:
 			task_susc_del(t,sites,db,logs); break;
 		case T_SUSC_STOP:

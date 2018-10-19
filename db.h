@@ -59,6 +59,9 @@ int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail, T_logs *
 
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name,char *error, int *db_fail, T_logs *logs);
 
+/* Para las suscripcionse */
+int db_susc_add(T_db *db, char *susc_id, int *db_fail, T_logs *logs);
+
 
 /* Para los workers */
 void db_worker_start(T_db *db, int id);

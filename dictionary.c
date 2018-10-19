@@ -36,7 +36,6 @@ int dictionary_add(T_dictionary *d, char *key, char *value){
 	dictionary_node *aux;
 	int exist=0;
 
-	printf("Agregamos al diccionario: %s = %s\n",key,value);
 	aux = d->first;
 	while(!exist && aux != NULL){
 		if(strcmp(aux->key,key) == 0) exist=1;

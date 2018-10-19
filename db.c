@@ -259,19 +259,20 @@ int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail, T_logs 
 
 /****	Funciones para suscripciones	****/
 
-int db_susc_add(T_db *db, my_ulonglong susc_id, int *db_error, T_logs *logs){
+int db_susc_add(T_db *db, char *susc_id, int *db_fail, T_logs *logs){
 	char query[200];
 	char hash_dir[6];
 
 	random_dir(hash_dir);
-	sprintf(query,"insert into web_suscription values (%lu,'%s')",susc_id,hash_dir);
+	sprintf(query,"insert into web_suscription values (%s,'%s')",susc_id,hash_dir);
+	printf("sql %s\n",query);
 	logs_write(logs,L_DEBUG,"db_susc_add", query);
 	if(mysql_query(db->con,query)){
         	logs_write(logs,L_ERROR,"db_susc_add","DB_ERROR");
-		*db_error = 1;
+		*db_fail = 1;
 		return 0;
 	}
-	*db_error = 0;
+	*db_fail = 0;
 	return 1;
 }
 
