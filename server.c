@@ -155,9 +155,9 @@ int send_all_message(T_server *s, char *send_message, uint32_t send_message_size
 	int c=0;	//Cantidad byes enviados
 	uint32_t parce_size;
 
-	printf("Enviaremos al CORE: %s\n",send_message);
+	printf("Enviaremos al CORE: %i - %s\n",send_message_size, send_message);
 	if( send_message[send_message_size-1] != '\0'){
-		printf("cloud_send_receive: ERROR. send_message no termina en \\0");
+		printf("cloud_send_receive: ERROR. send_message no termina en \\0\n");
 		return 0;
 	}
 

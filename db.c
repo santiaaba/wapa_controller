@@ -259,6 +259,29 @@ int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail, T_logs 
 
 /****	Funciones para suscripciones	****/
 
+int db_susc_show(T_db *db,char *susc_id,char **message,int *db_fail,T_logs *logs){
+	/* Retorna en formato json los datos de una suscripcion */
+	char query[200];
+	char aux[200];
+	MYSQL_ROW row;
+	MYSQL_RES *result;
+
+	sprintf(query,"select * from web_suscription where id=%s",susc_id);
+	if(mysql_query(db->con,query)){
+		logs_write(logs,L_ERROR,"db_susc_add","DB_ERROR");
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
+	result = mysql_store_result(db->con);
+	strcpy(aux,"200|\"cloud\":\"Hosting web\",\"data\":\"Nada de momento\"}");
+	printf("DB_SUSC_SHOW: %s\n",aux);
+	*message=(char *)realloc(*message,strlen(aux)+1);
+	strcpy(*message,aux);
+	return 1;
+	
+}
+
 int db_susc_add(T_db *db, char *susc_id, int *db_fail, T_logs *logs){
 	char query[200];
 	char hash_dir[6];

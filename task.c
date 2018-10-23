@@ -5,7 +5,8 @@ void random_task_id(T_taskid value){
 	char *string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	int i,j;
 	
-	for(j=0;j<TASKID_SIZE-1;j++){
+	//for(j=0;j<TASKID_SIZE-1;j++){
+	for(j=0;j<TASKID_SIZE;j++){
 		i = rand() % 62;
 		value[j] = string[i];
 	}
@@ -197,6 +198,21 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	logs_write(logs,L_INFO,"task_site_del","Sitio borrado");
 	return 1;
 }
+
+
+int task_susc_show(T_task *t, T_db *db, T_logs *logs){
+	/* Retorna en formato Json informacion de la suscripcion */
+	int db_fail;
+	char *message=NULL;
+
+	if(db_susc_show(db,dictionary_get(t->data,"susc_id"),&message,&db_fail,logs)){
+		task_done(t,message);
+	} else {
+		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+	}
+	
+}
+
 int task_susc_add(T_task *t, T_db *db, T_logs *logs){
 	/* Agrega una suscripcion */
 	int db_fail;
@@ -430,6 +446,7 @@ T_task_type task_c_to_type(char c){
 		case '1': return T_SUSC_DEL;
 		case '2': return T_SUSC_STOP;
 		case '3': return T_SUSC_START;
+		case '4': return T_SUSC_SHOW;
 
 		case 'l': return T_SITE_LIST;
 		case 's': return T_SITE_SHOW;
@@ -464,6 +481,8 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 			task_susc_stop(t,sites,db); break;
 		case T_SUSC_START:
 			task_susc_start(t,sites,db); break;
+		case T_SUSC_SHOW:
+			task_susc_show(t,db,logs); break;
 
 		case T_SITE_LIST:
 			task_site_list(t,db,logs); break;

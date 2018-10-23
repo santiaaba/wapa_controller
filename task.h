@@ -20,6 +20,7 @@
 typedef enum {	
 		T_TASK_SHOW,
 
+		T_SUSC_SHOW,
 		T_SUSC_ADD,
 		T_SUSC_DEL,
 		T_SUSC_MOD,
