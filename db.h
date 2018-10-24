@@ -37,7 +37,7 @@ int db_find_site(T_db *db, char *name);
 int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail, T_logs *logs);
 
 /* Para los sitios */
-int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size);
+int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail );
 
 int db_site_add(T_db *db, T_site **newsite, char *name,
 		unsigned int susc_id, char *dir, char *error,
@@ -63,6 +63,8 @@ int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name,cha
 int db_susc_show(T_db *db,char *susc_id,char **message,int *db_fail,T_logs *logs);
 
 int db_susc_add(T_db *db, char *susc_id, int *db_fail, T_logs *logs);
+
+int db_susc_del(T_db *db, char *susc_id, T_logs *logs);
 
 
 /* Para los workers */

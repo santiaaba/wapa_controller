@@ -102,29 +102,25 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	name = dictionary_get(t->data,"name");
 	susc_id = dictionary_get(t->data,"susc_id");
 
-	/* Los tres valores anteriores no pueden ser vacio */
-	//if(strcmp(susc_id,"") == 0){ return 0; }
-	//if(strcmp(name,"") == 0){ return 0; }
-
 	// Alta en la base de datos del sitio
 	if(!db_site_add(db,&newsite,name,atoi(susc_id),hash_dir,error,&db_fail,logs)){
 		if(db_fail){
 			task_done(t,ERROR_FATAL);
 			logs_write(logs,L_ERROR,"task_site_add", "DB_ERROR");
-			return 0;
 		} else {
 			task_done(t,error);
 		}
+		return 0;
 	}
 
 	// Creacion del espacio de almacenamiento
 	printf("Creacion de directorios\n");
-	sprintf(command,"mkdir -p /websites/%s/wwwroot",hash_dir);
+	sprintf(command,"mkdir -p /websites/%s/%s/wwwroot",hash_dir,name);
 	if(system(command) != 0){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
-	sprintf(command,"mkdir -p /websites/%s/logs",hash_dir);
+	sprintf(command,"mkdir -p /websites/%s/%s/logs",hash_dir,name);
 	if(system(command) != 0){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
@@ -142,7 +138,7 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	/* Borra fisicamente y logicamente un sitio.
  	 * si pudo borrarlo retorna 1. Si no pudo o
  	 * fue borrado parcialmente retorna 0 */
-	char hash_dir[6];
+	char hash_dir[10];
 	char error[200];
 	char site_name[100];
 	char command[200];
@@ -153,9 +149,8 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 
 	printf("task_site_del\n");
 
-	//dictionary_print(t->data);
 	site_id = dictionary_get(t->data,"site_id");
-	//if(strcmp(site_id,"") == 0){return 0; }
+	printf("pasamos %s\n",site_id);
 
 	if(!db_get_hash_dir(db,site_id,hash_dir,site_name,error,&db_fail,logs)){
 		if(db_fail){
@@ -165,11 +160,13 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 		}
 		return 0;
 	}
+	printf("Tenemos el hash\n");
 	/* Borramos de la base de datos el sitio, indices y alias*/
 	if(!db_site_del(db,site_id,error,&db_fail,logs)){
 		task_done(t,ERROR_FATAL);
 		return 0;
 	}
+	printf("Tenemos entradas en la DB\n");
 
 	/* Lo borramos logicamente y quitamos del apache */
 	site = list_site_find_id(l,atoi(site_id));
@@ -184,6 +181,7 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 			list_worker_next(site_get_workers(site));
 		}
 	}
+	printf("Quitamos de los apaches y listas\n");
 
 	/* Lo borramos fisicamente de la estructura de directorios */
 	sprintf(command,"rm -rf /websites/%s/%s",hash_dir,site_name);
@@ -193,6 +191,7 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 		task_done(t,ERROR_FATAL);
 		return 0;
 	}
+	printf("Borramos del directorio\n");
 
 	task_done(t,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
 	logs_write(logs,L_INFO,"task_site_del","Sitio borrado");
@@ -224,88 +223,125 @@ int task_susc_add(T_task *t, T_db *db, T_logs *logs){
 	}
 }
 
-int task_susc_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
+void task_susc_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	/* Elimina una suscripcion y todos sus datos */
 	/* Retorna 1 si pudo borrar todo. Caso contrario retorna 0 */
-	T_task *task_aux;
+	int site_ids[256];	//256 es la maxima cantidad de sitios por suscripcion
+	int site_ids_len = 0;	//Cantidad de elementos del array site_ids
+	T_task *task_aux=NULL;
+	T_dictionary *data_aux=NULL;
 	int ok=1;
 	char site_id[100];
 	char *susc_id;
-	int pos;
-	char *aux=NULL;
-	int aux_size;
+	char error[200];
+	int db_fail;
 
-	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
-		pos=0;
-		db_get_sites_id(db,susc_id,&aux,&aux_size);
-		while(pos<aux_size && ok){
-			parce_data(aux,',',&pos,site_id);
-			dictionary_add(task_aux->data,"site_id",site_id);
-			ok &= task_site_del(task_aux,l,db,logs);
-			dictionary_remove(task_aux->data,"site_id");
+		task_aux = (T_task *)malloc(sizeof(T_task));
+		data_aux = (T_dictionary *)malloc(sizeof(T_dictionary));
+		dictionary_init(data_aux);
+		task_init(task_aux,T_SITE_DEL,data_aux);
+		if(!db_get_sites_id(db,susc_id,site_ids,&site_ids_len,error,&db_fail)){
+			if(db_fail)
+				task_done(t,ERROR_FATAL);
+			else
+				task_done(t,error);
+		} else {
+			while((site_ids_len > 0) && ok){
+				sprintf(site_id,"%i",site_ids[site_ids_len - 1 ]);
+				dictionary_add(task_aux->data,"site_id",site_id);
+				dictionary_print(task_aux->data);
+				ok &= task_site_del(task_aux,l,db,logs);
+				dictionary_remove(task_aux->data,"site_id");
+				site_ids_len--;
+			}
 		}
-	}
-	free(task_aux);
-	free(aux);
-	if(ok){
-		task_done(t,"200|\"code\":\"202\",\"info\":\"Sitios borrados\"");
-	} else {
+		task_destroy(&task_aux);
+		printf("OK vale=%i\n",ok);
+		if(ok){
+			/* Eliminados los sitios borramos la suscripcion de la base de datos */
+			if(!db_susc_del(db,susc_id,logs))
+				task_done(t,ERROR_FATAL);
+			else
+				task_done(t,"200");
+		} else
+			task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+	} else 
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-	}
-	return ok;
 }
 
 void task_susc_stop(T_task *t, T_list_site *l, T_db *db){
 	/* Detiene todos los sitios de una suscripcion */
+	int site_ids[256];	//256 es la maxima cantidad de sitios por suscripcion
+	int site_ids_len = 0;	//Cantidad de elementos del array site_ids
 	T_task *task_aux;
-	char *aux;
-	int aux_size;
 	char *susc_id;
 	char site_id[50];
-	int pos;
+	char error[200];
+	int db_fail;
 	int ok;
 
 	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
-		pos=0;
-		db_get_sites_id(db,susc_id,&aux,&aux_size);
-		while(pos<aux_size && ok){
-			parce_data(aux,',',&pos,site_id);
-			dictionary_add(task_aux->data,"site_id",site_id);
-			ok &= task_site_stop(task_aux,l,db);
-			dictionary_remove(task_aux->data,"site_id");
+		if(!db_get_sites_id(db,susc_id,site_ids,&site_ids_len,error,&db_fail)){
+			if(db_fail)
+				task_done(t,ERROR_FATAL);
+			else
+				task_done(t,error);
+		} else {
+			while((site_ids_len > 0) && ok){
+				sprintf(site_id,"%i",site_ids[site_ids_len-1]);
+				dictionary_add(task_aux->data,"site_id",site_id);
+				ok &= task_site_stop(task_aux,l,db);
+				dictionary_remove(task_aux->data,"site_id");
+				site_ids_len--;
+			}
 		}
-	}
-	free(task_aux);
+		free(task_aux);
+		if(ok)
+			task_done(t,"200");
+		else
+			task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+	} else
+		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 }
 	
 void task_susc_start(T_task *t, T_list_site *l, T_db *db){
 	/* ARRANCA todos los sitios de una suscripcion */
 	T_task *task_aux;
-	char *aux;
-	int aux_size;
+	int site_ids[256];	//256 es la maxima cantidad de sitios por suscripcion
+	int site_ids_len = 0;	//Cantidad de elementos del array site_ids
 	char *susc_id;
 	char site_id[50];
-	int pos;
+	char error[200];
+	int db_fail;
 	int ok;
 
 	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
-		pos=0;
-		db_get_sites_id(db,susc_id,&aux,&aux_size);
-		while(pos<aux_size && ok){
-			parce_data(aux,',',&pos,site_id);
-			dictionary_add(task_aux->data,"site_id",site_id);
-			ok &= task_site_start(task_aux,l,db);
-			dictionary_remove(task_aux->data,"site_id");
+		if(!db_get_sites_id(db,susc_id,site_ids,&site_ids_len,error,&db_fail)){
+			if(db_fail)
+				task_done(t,ERROR_FATAL);
+			else
+				task_done(t,error);
+		} else {
+			while((site_ids_len > 0) && ok){
+				sprintf(site_id,"%i",site_ids[site_ids_len-1]);
+				dictionary_add(task_aux->data,"site_id",site_id);
+				ok &= task_site_start(task_aux,l,db);
+				dictionary_remove(task_aux->data,"site_id");
+			}
 		}
-	}
-	free(task_aux);
-
+		free(task_aux);
+		if(ok)
+			task_done(t,"200");
+		else
+			task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+	} else
+		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 }
 
 int task_site_stop(T_task *t, T_list_site *l, T_db *db, T_logs *logs){

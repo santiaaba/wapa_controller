@@ -29,6 +29,7 @@ int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir,
 	MYSQL_ROW row;
 
 	sprintf(query,"select name,hash_dir from web_site s inner join web_suscription u on (s.susc_id = u.id) where s.id=%s", site_id);
+	printf("%s\n",query);
 	logs_write(logs,L_DEBUG,"db_get_hash_dir",query);
 	if(mysql_query(db->con,query)){
 		*db_fail=1;
@@ -37,11 +38,13 @@ int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir,
 	}
 	*db_fail = 0;
 	result = mysql_store_result(db->con);
+	printf("Estamos aca\n");
 	if(mysql_num_rows(result) > 0){
-		result = mysql_store_result(db->con);
 		row = mysql_fetch_row(result);
-		strcpy(hash_dir,row[1]);
+		printf("Llegamos Estamos aca\n");
 		strcpy(site_name,row[0]);
+		strcpy(hash_dir,row[1]);
+		printf("Llegamos Estamos aca\n");
 		return 1;
 	} else {
 		sprintf(error,"300|\"code\":\"302\",\"info\":\"Imposible borrar. sitio no existe\"");
@@ -299,6 +302,19 @@ int db_susc_add(T_db *db, char *susc_id, int *db_fail, T_logs *logs){
 	return 1;
 }
 
+int db_susc_del(T_db *db, char *susc_id, T_logs *logs){
+	/* Elimina una suscripcion. Previamente se deberia eliminar
+	   los sitios de la misma. Si falla retorna 0 y se considera
+	   una falla en la base de datos. Sino retorna 1 */
+	char query[200];
+	sprintf(query,"delete from web_suscription where id=%s",susc_id);
+	printf("query:%s\n",query);
+	if(mysql_query(db->con,query))
+		return 0;
+	else
+		return 1;
+}
+
 /****	Funciones para sitios	****/
 
 int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
@@ -318,6 +334,7 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
 	logs_write(logs,L_DEBUG,"db_site_add", query);
 
 	if(mysql_query(db->con,query)){
+		printf("DB_SITE_ADD errno: %i\n",mysql_errno(db->con));
 		if(mysql_errno(db->con) == 1062){
 			logs_write(logs,L_ERROR,"db_site_add", "DB_ERROR");
 			*db_fail =0;
@@ -488,28 +505,29 @@ int db_site_status(T_db *db, char *susc_id, char *site_id, char *status, char *e
 	return 1;
 }
 
-int db_get_sites_id(T_db *db, char *susc_id, char **list_id, int *list_id_size){
-	/* Retorna los sitios que posee una suscripcion dado el id
- 	 * de la misma pasado por parametro */
+int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail ){
+	/* Retorna en la variable site_ids la cual es en array de int, el listado
+ 	 * de ids de sitios de la suscripcion */
 	char query[200];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
+	int i=0;
 	
-	sprintf(query,"select id from web_site where susc_id=%c",susc_id);
+	sprintf(query,"select id from web_site where susc_id=%s",susc_id);
 	printf("QEURY : %s\n",query);
-	mysql_query(db->con,query);
-
-	*list_id_size=40;
-	*list_id = (char *)realloc(*list_id,*list_id_size);
-	while(row = mysql_fetch_row(result)){
-		if(*list_id_size < strlen(row[0] + strlen(*list_id)) + 2){
-			*list_id_size+=40;	// Se que mas de 40 no ocupa un site_id + "," + "\0";
-			*list_id = (char *)realloc(*list_id,*list_id_size);
-		}
-		strcat(*list_id,"%s");
-		strcat(*list_id,",");
+	if(mysql_query(db->con,query)){
+		*db_fail = 1;
+		return 0;
 	}
-	*list_id[(*list_id_size)-1] = '\0';
+	*db_fail = 0;
+	printf("paso\n");
+	result = mysql_store_result(db->con);
+	while(row = mysql_fetch_row(result)){
+		site_ids[i] = atoi(row[0]);
+		i++;
+	}
+	*site_ids_len = i;
+	printf("Termino\n");
 	return 1;
 }
 
@@ -521,6 +539,7 @@ void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 	char query[200];
 	char aux[max_c_site];
 	int real_size;
+	int exist=0;
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
@@ -533,6 +552,7 @@ void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 	real_size = max_c_site;
 	strcpy(*data,"200|[");
 	while(row = mysql_fetch_row(result)){
+		exist = 1;
 		printf("Agregando\n");
 		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",row[0],row[1],row[2]);
 		if(strlen(*data)+strlen(aux)+1 < real_size){
@@ -541,7 +561,11 @@ void db_site_list(T_db *db, char **data, int *data_size, char *susc_id){
 		}
 		strcat(*data,aux);
 	}
-	(*data)[strlen(*data) - 1] = ']';
+	if(exist){
+		(*data)[strlen(*data) - 1] = ']';
+	} else {
+		strcat(*data,"]");
+	}
 	printf("Resultado:-%s-\n",*data);
 	*data_size = real_size;
 }
