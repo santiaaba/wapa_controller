@@ -59,8 +59,10 @@ char *task_get_id(T_task *t){
 
 void task_done(T_task *t, char *message){
 	t->status = T_DONE;
-	t->result_size = strlen(message);
+	t->result_size = strlen(message) + 1;	// El +1 es lara el "\0" del final del string
+	printf("Allocamos espacio\n");
 	t->result=(char *)realloc(t->result,t->result_size);
+	printf("Copiamos mensaje -%s-\n",message);
 	strcpy(t->result,message);
 }
 
@@ -110,6 +112,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 		} else {
 			task_done(t,error);
 		}
+		printf("Paso\n");
 		return 0;
 	}
 
@@ -238,7 +241,9 @@ void task_susc_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
+		printf("task_susc_del\n");
 		task_aux = (T_task *)malloc(sizeof(T_task));
+		printf("task_susc_del\n");
 		data_aux = (T_dictionary *)malloc(sizeof(T_dictionary));
 		dictionary_init(data_aux);
 		task_init(task_aux,T_SITE_DEL,data_aux);
@@ -282,6 +287,7 @@ void task_susc_stop(T_task *t, T_list_site *l, T_db *db){
 	int db_fail;
 	int ok;
 
+	printf("task_susc_stop\n");
 	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
@@ -319,6 +325,7 @@ void task_susc_start(T_task *t, T_list_site *l, T_db *db){
 	int db_fail;
 	int ok;
 
+	printf("task_susc_start\n");
 	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
@@ -525,7 +532,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		case T_SITE_SHOW:
 			task_site_show(t,db,logs); break;
 		case T_SITE_ADD:
-			task_site_add(t,sites,db,logs); break;
+			task_site_add(t,sites,db,logs); printf("paso case\n"); break;
 		case T_SITE_DEL:
 			task_site_del(t,sites,db,logs); break;
 		case T_SITE_MOD:
@@ -563,6 +570,7 @@ void heap_task_push(T_heap_task *h, T_task *t){
 	heap_t_node *new;
 	heap_t_node *aux;
 
+	printf("heap_task_push\n");
 	new = (heap_t_node*)malloc(sizeof(heap_t_node));
 	new->next = NULL;
 	new->data = t;
@@ -637,6 +645,7 @@ void bag_task_add(T_bag_task *b, T_task *t){
 	bag_t_node *new;
 	bag_t_node *aux;
 
+	printf("bag_task_add\n");
 	new = (bag_t_node*)malloc(sizeof(bag_t_node));
 	new->next = NULL;
 	new->data = t;

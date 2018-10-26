@@ -110,8 +110,9 @@ int create_task(T_task **task, char *buffer_rx){
 	int pos=1;
 	T_dictionary *data;
 
-	printf("Creamos el task\n");
+	printf("create_task\n");
 	*task=(T_task *)malloc(sizeof(T_task));
+	printf("create_task\n");
 	data=(T_dictionary *)malloc(sizeof(T_dictionary));
 	dictionary_init(data);
 	buffer_to_dictionary(buffer_rx,data,&pos);
@@ -212,7 +213,9 @@ void *server_listen(void *param){
 	}
 	s->sin_size=sizeof(struct sockaddr_in);
 
+	printf("server_listen\n");
 	recv_message = (char *)malloc(10);
+	printf("server_listen\n");
 	send_message = (char *)malloc(10);
 	while(1){
 		printf("Esperando conneccion desde el cliente()\n"); //Debemos mantener viva la conexion

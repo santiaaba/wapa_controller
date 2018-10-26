@@ -344,6 +344,7 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
 			*db_fail =1;
 			logs_write(logs,L_ERROR,"db_site_add","DB_ERROR");
 		}
+		printf("Pasamos\n");
 		return 0;
 	} else {
 		site_id = mysql_insert_id(db->con);

@@ -91,7 +91,6 @@ void dictionary_destroy(T_dictionary **d){
 	
 	while((*d)->first!=NULL){
 		aux = (*d)->first;
-		printf("Eliminamos del diccionario: %s = %s\n",aux->key,aux->value);
 		free(aux->key);
 		free(aux->value);
 		(*d)->first = (*d)->first->next;
