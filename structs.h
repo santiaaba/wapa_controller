@@ -141,10 +141,10 @@ unsigned int proxy_get_last_time(T_proxy *p);
 int proxy_check(T_proxy *p);
 int proxy_add_site(T_proxy *p, T_site *s);
 int proxy_change_site(T_proxy *p, T_site *s);
-char *proxy_get_ip(T_proxy *p);
+char *proxy_get_ipv4(T_proxy *p);
 float proxy_get_load(T_proxy *p);
-void proxy_set_online(T_proxy *p);
-void proxy_set_offline(T_proxy *p);
+void proxy_start(T_proxy *p);
+void proxy_stop(T_proxy *p);
 int proxy_reload(T_proxy *p);
 void proxy_reconfig(T_proxy *p, T_list_site *sites);
 
@@ -295,5 +295,6 @@ unsigned int list_proxy_size(T_list_proxy *l);
 int list_proxy_eol(T_list_proxy *l);
 void list_proxy_remove(T_list_proxy *l);
 void list_proxy_destroy(T_list_proxy *l);
+T_proxy *list_proxy_find_id(T_list_proxy *l, int proxy_id);
 
 #endif

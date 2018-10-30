@@ -231,6 +231,16 @@ int reload_services(T_list_worker *workers, T_list_proxy *proxys){
 	}
 }
 
+void check_db(T_db *db){
+	// Verifica el estado de la conexion a la base de datos
+	printf("Chequeamos base\n");
+	if(!db_live(db)){
+		printf("DB NO CONNECT!!!!");
+		db_connect(db);
+	}
+	printf("Termina chequeo DB\n");
+}
+
 int check_proxys(T_list_proxy *proxys, T_list_site *sites){
 
 	T_proxy *proxy;
@@ -402,21 +412,21 @@ void main(){
 	list_proxy_init(&proxys);
 
 	/* Conectamos contra la base de datos */
-	db_init(&db);
-	if (!db_connect(&db,&config)){
+	db_init(&db,&config,&logs);
+	if (!db_connect(&db)){
 		logs_write(&logs,L_ERROR,"Error conexcion a la base de datos","");
 		exit(1);
 	}
 	/* Cargamos los datos de la base de datos */
-	if(!db_load_sites(&db,&sites,error,&db_fail,&logs)){
+	if(!db_load_sites(&db,&sites,error,&db_fail)){
 		logs_write(&logs,L_ERROR,"Error al cargar los sitios desde la base de datos","");
 		exit(1);
 	}
-	if(!db_load_workers(&db,&workers,error,&db_fail,&logs)){
+	if(!db_load_workers(&db,&workers,error,&db_fail)){
 		logs_write(&logs,L_ERROR,"Error al cargar los workers desde la base de datos","");
 		exit(1);
 	}
-	if(!db_load_proxys(&db,&proxys,error,&db_fail,&logs)){
+	if(!db_load_proxys(&db,&proxys,error,&db_fail)){
 		logs_write(&logs,L_ERROR,"Error al cargar los proxys desde la base de datos","");
 		exit(1);
 	}
@@ -434,7 +444,7 @@ void main(){
 	/* Comenzamos el loop del controller */
 	while(1){
 		sleep(1);
-		continue;
+		//continue;
 		changed = 0;
 		server_lock(&server);
 
@@ -456,6 +466,9 @@ void main(){
 
 		if(changed)
 			reload_services(&workers,&proxys);
+
+		/* Chequeo base de datos */
+		check_db(&db);
 
 		printf("Fin del bucle");
 		sleep(5);

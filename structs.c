@@ -563,18 +563,18 @@ int proxy_get_id(T_proxy *p){
 	return p->id;
 }
 
-void proxy_set_online(T_proxy *p){
+void proxy_start(T_proxy *p){
 	proxy_change_status(p,P_PREPARED);
 }
 
-void proxy_set_offline(T_proxy *p){
+void proxy_stop(T_proxy *p){
 	proxy_change_status(p,P_OFFLINE);
 }
 
 char *proxy_get_name(T_proxy *p){
 	return p->name;
 }
-char *proxy_get_ip(T_proxy *p){
+char *proxy_get_ipv4(T_proxy *p){
 	return p->ip;
 }
 
@@ -1336,3 +1336,24 @@ void list_proxy_erase(T_list_proxy *l){
 		list_proxy_remove(l);
 	}
 }
+
+T_proxy *list_proxy_find_id(T_list_proxy *l, int proxy_id){
+	/* Retorna el proxy buscando por su id. Si no
+	 * existe retorna null */
+
+	list_p_node *aux;
+	int exist = 0;
+
+	aux = l->first;
+	while(aux != NULL && !exist){
+		exist = (proxy_get_id(aux->data) == proxy_id);
+		if(!exist){ aux = aux->next;}
+	}
+	if(exist){
+		return aux->data;
+	} else {
+		return NULL;
+	}
+}
+
+

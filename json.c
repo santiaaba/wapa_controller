@@ -99,30 +99,43 @@ void json_site(char **data, int *size, T_site *site){
 	strcat(*data,"}");
 }
 
-void json_workers(char **data, int *size, T_list_worker *workers){
-	/* Retorna los id de todos los workers existentes */
-	/* Realoca la memoria de data y retorna el tamano en
- 	 * size, si es que no entran los datos */
+void json_servers(char **data, int *size, T_list_worker *workers, T_list_proxy *proxys, T_db *db){
+	/* Retorna los id de todos los workers y proxys existentes y alguna otra info relevante */
+	/* Realoca la memoria de data y retorna el tamano en size, si es que no entran los datos */
 
 	T_worker *worker;
+	T_proxy *proxy;
 
-	list_worker_first(workers);
 	strcpy(*data,"[");
+	list_worker_first(workers);
 	while(!list_worker_eol(workers)){
 		worker = list_worker_get(workers);
-		if((40 + strlen(*data)) > *size){
+		if((100 + strlen(*data)) > *size){
 			/* Los datos pueden superan el espacio de data */
 			*size = *size + 100;
 			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
-		sprintf(*data,"%s%lu,",*data,worker_get_id(worker));
+		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":0,\"status\":%i},",
+			*data,worker_get_id(worker),worker_get_name(worker),worker_get_status(worker));
 		list_worker_next(workers);
+	}
+	list_proxy_first(proxys);
+	while(!list_proxy_eol(proxys)){
+		proxy = list_proxy_get(proxys);
+		if((100 + strlen(*data)) > *size){
+			/* Los datos pueden superan el espacio de data */
+			*size = *size + 100;
+			*data = (char *) realloc(*data,*size * sizeof(char));
+		}
+		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":0,\"status\":%i},",
+			*data,proxy_get_id(proxy),proxy_get_name(proxy),proxy_get_status(proxy));
+		list_proxy_next(proxys);
 	}
 	(*data)[strlen(*data)-1] = ']';
 }
 
 
-void json_worker(char **data, int *size, T_worker *worker){
+int json_worker(char **data, int *size, T_worker *worker, T_db *db){
 	/* Retorna todos los datos de un worker
  	 * Realoca la memoria de data y retorna el tamano en
 	 * size, si es que no entran los datos */
@@ -130,7 +143,7 @@ void json_worker(char **data, int *size, T_worker *worker){
 	T_site *site;
 	char *ipv4;
 	char *name;
-	char aux[40];
+	char aux[100];
 	char id[40];
 
 	/* Por las dudas verificamos que data sea de al menos 1000 bytes */
@@ -141,7 +154,7 @@ void json_worker(char **data, int *size, T_worker *worker){
 	
 	if(worker == NULL){
 		strcpy(*data,"{\"name\":\"WORKER no existe\"}");
-		return;
+		return 1;
 	}
 	
 	strcpy(*data,"{\"name\":\"");
@@ -152,8 +165,15 @@ void json_worker(char **data, int *size, T_worker *worker){
 	strcat(*data,"\",\"ipv4\":\"");
 	sprintf(aux,"%s",worker_get_ipv4(worker));
 	strcat(*data,aux);
-	strcat(*data,"\",\"status\":\"");
+	strcat(*data,"\",\"real_status\":\"");
 	sprintf(aux,"%i",worker_get_status(worker));
+	strcat(*data,aux);
+
+	/* Obtenemos de la base de datos informacion relevante */
+	if(!db_worker_get_info(db,worker_get_id(worker),aux)){
+		return 0;
+	}
+	strcat(*data,"\",");
 	strcat(*data,aux);
 	strcat(*data,"\",\"sites\":[ ");
 
@@ -181,4 +201,50 @@ void json_worker(char **data, int *size, T_worker *worker){
 	}
 	(*data)[strlen(*data)-1] = ']';
 	strcat(*data,"}");
+	return 1;
+}
+
+int json_proxy(char **data, int *size, T_proxy *proxy, T_db *db){
+	/* Retorna todos los datos de un proxy
+ 	 * Realoca la memoria de data y retorna el tamano en
+	 * size, si es que no entran los datos */
+
+	T_site *site;
+	char *ipv4;
+	char *name;
+	char aux[100];
+	char id[40];
+
+	/* Por las dudas verificamos que data sea de al menos 1000 bytes */
+	if(*size < 1000){
+		*size = 1000;
+		*data = (char *) realloc(*data,*size * sizeof(char));
+	}
+	
+	if(proxy == NULL){
+		strcpy(*data,"{\"name\":\"PROXY no existe\"}");
+		return 1;
+	}
+	
+	strcpy(*data,"{\"name\":\"");
+	strcat(*data,proxy_get_name(proxy));
+	strcat(*data,"\",\"id\":\"");
+	sprintf(aux,"%lu",proxy_get_id(proxy));
+	strcat(*data,aux);
+	strcat(*data,"\",\"ipv4\":\"");
+	sprintf(aux,"%s",proxy_get_ipv4(proxy));
+	strcat(*data,aux);
+	strcat(*data,"\",\"real_status\":\"");
+	sprintf(aux,"%i",proxy_get_status(proxy));
+	strcat(*data,aux);
+
+	/* Obtenemos de la base de datos informacion relevante */
+	if(!db_proxy_get_info(db,proxy_get_id(proxy),aux)){
+		return 0;
+	}
+	strcat(*data,"\",");
+	strcat(*data,aux);
+
+	(*data)[strlen(*data)-1] = '}';
+	return 1;
 }
