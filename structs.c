@@ -6,13 +6,24 @@
 
 void itowstatus(T_worker_status i, char *name){
 	switch(i){
-		case W_ONLINE: strcpy(name,"W_ONLINE"); break;
-		case W_UNKNOWN: strcpy(name,"W_UNKNOWN"); break;
-		case W_OFFLINE: strcpy(name,"W_OFFLINE"); break;
-		case W_BROKEN: strcpy(name,"W_BROKEN"); break;
-		case W_PREPARED: strcpy(name,"W_PREPARED"); break;
+		case W_ONLINE: strcpy(name,"ONLINE"); break;
+		case W_UNKNOWN: strcpy(name,"UNKNOWN"); break;
+		case W_OFFLINE: strcpy(name,"OFFLINE"); break;
+		case W_BROKEN: strcpy(name,"BROKEN"); break;
+		case W_PREPARED: strcpy(name,"PREPARED"); break;
 	}
 }
+
+void itopstatus(T_proxy_status i, char *name){
+	switch(i){
+		case P_ONLINE: strcpy(name,"ONLINE"); break;
+		case P_UNKNOWN: strcpy(name,"UNKNOWN"); break;
+		case P_OFFLINE: strcpy(name,"OFFLINE"); break;
+		case P_BROKEN: strcpy(name,"BROKEN"); break;
+		case P_PREPARED: strcpy(name,"PREPARED"); break;
+	}
+}
+
 
 /*****************************
 	 Sitios
@@ -308,21 +319,25 @@ int worker_add_site(T_worker *w, T_site *s){
 	uint32_t send_message_size;
 	char *rcv_message = NULL;
 	uint32_t rcv_message_size;
-	int ok=1;
+	int ok;
 
 	T_s_e *aux_s_e;
 
 	printf("WORKER_ADD_SITE: Entro\n");
 	send_message_size = 100;
 	send_message = (char *)malloc(send_message_size);
-	sprintf(send_message,"A%lu|%s|%s|%i|%i",site_get_id(s),
+	sprintf(send_message,"A%lu|%s|%s|%i|%i|",site_get_id(s),
 		site_get_name(s),site_get_dir(s),site_get_version(s),
 		site_get_status(s));
+	/* Esta fallando el sprintf con 5 variables */
+	printf("SITIO DE MOMENTO: %s\n",send_message);
 
 	// Armar los alias
 	printf("WORKER_ADD_SITE: armamos alias\n");
 	list_s_e_first(site_get_alias(s));
+	ok=0;
 	while(!list_s_e_eol(site_get_alias(s))){
+		ok = 1;
 		aux_s_e = list_s_e_get(site_get_alias(s));
 		printf("alias agregado: %s\n",s_e_get_name(aux_s_e));
 		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
@@ -334,12 +349,15 @@ int worker_add_site(T_worker *w, T_site *s){
 		strcat(send_message,aux);
 		list_s_e_next(site_get_alias(s));
 	}
-	send_message[strlen(send_message)-1] = '|';
+	if(ok)
+		send_message[strlen(send_message)-1] = '|';
 
 	// Armar los indices
 	printf("WORKER_ADD_SITE: armamos indices\n");
 	list_s_e_first(site_get_indexes(s));
+	ok=0;
 	while(!list_s_e_eol(site_get_indexes(s))){
+		ok=1;
 		aux_s_e = list_s_e_get(site_get_indexes(s));
 		printf("index agregado: %s\n",s_e_get_name(aux_s_e));
 		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
@@ -350,12 +368,15 @@ int worker_add_site(T_worker *w, T_site *s){
 		strcat(send_message,aux);
 		list_s_e_next(site_get_indexes(s));
 	}
+	if(ok)
+		send_message[strlen(send_message)-1] = '\0';
 
 	/* Normalizamos el send_message */
 	send_message_size = strlen(send_message)+1;
 	send_message = (char *)realloc(send_message,send_message_size);
 	
 	printf("WORKER_ADd_SITE: enviamos mensaje\n");
+	ok=1;
 	if(worker_send_receive(w,send_message,send_message_size,&rcv_message,&rcv_message_size)){
 		if(rcv_message[0] == '1'){
 			list_site_add(w->sites,s);
@@ -445,6 +466,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 		if(first_message){
 			first_message=0;
 			_4bytes_to_int(buffer,rcv_message_size);
+			//printf("WORKER RCV: Nos enviaran: %u bytes\n",*rcv_message_size);
 			*rcv_message=(char *)realloc(*rcv_message,*rcv_message_size);
 		}
 
@@ -452,7 +474,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 		memcpy(*rcv_message+c,&(buffer[ROLE_HEADER_SIZE]),parce_size);
 		c += parce_size;
 	} while (c < *rcv_message_size);
-	printf("WORKER RCV: send_message_size=:%u, send_message=%s\n",rcv_message_size,*rcv_message);
+	printf("WORKER RCV: rcv_message_size=:%u, rcv_message=%s\n",*rcv_message_size,*rcv_message);
 	return 1;
 }
 

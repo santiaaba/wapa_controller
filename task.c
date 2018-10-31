@@ -477,13 +477,16 @@ void task_server_show(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 	T_worker *worker = NULL;
 	T_proxy *proxy = NULL;
 
-	id = dictionary_get(t->data,"id");
+	id = dictionary_get(t->data,"server_id");
+	printf("TASK_SERVER_SHOW: Info del server id=%s\n",id);
 	worker = list_worker_find_id(lw,atoi(id));
 	if(worker){
+		printf("Es un worker\n");
 		if(!json_worker(&(t->result),&(t->result_size),worker,db)){
 			task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR base de datos\"");
 		}
 	} else {
+		printf("Es un proxy\n");
 		proxy = list_proxy_find_id(lp,atoi(id));
 		if(proxy){
 			if(!json_proxy(&(t->result),&(t->result_size),proxy,db)){
@@ -502,14 +505,17 @@ int task_server_stop(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 	T_worker *worker = NULL;
 	T_proxy *proxy = NULL;
 
-	id = dictionary_get(t->data,"id");
+	id = dictionary_get(t->data,"server_id");
+	printf("TASK_SERVER_STOP: Deteniendo server id=%s\n",id);
 	worker = list_worker_find_id(lw,atoi(id));
 	if(worker){
 		worker_stop(worker);
+		task_done(t,"200");
 	} else {
 		proxy = list_proxy_find_id(lp,atoi(id));
 		if(proxy){
 			proxy_stop(proxy);
+			task_done(t,"200");
 		} else {
 			task_done(t,"300|\"code\":\"310\",\"info\":\"Server no existe\"");
 		}
@@ -523,14 +529,17 @@ int task_server_start(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 	T_worker *worker = NULL;
 	T_proxy *proxy = NULL;
 
-	id = dictionary_get(t->data,"id");
+	id = dictionary_get(t->data,"server_id");
+	printf("TASK_SERVER_START: Iniciando server id=%s\n",id);
 	worker = list_worker_find_id(lw,atoi(id));
 	if(worker){
 		worker_start(worker);
+		task_done(t,"200");
 	} else {
 		proxy = list_proxy_find_id(lp,atoi(id));
 		if(proxy){
 			proxy_stop(proxy);
+			task_done(t,"200");
 		} else {
 			task_done(t,"300|\"code\":\"310\",\"info\":\"Server no existe\"");
 		}

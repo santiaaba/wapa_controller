@@ -29,6 +29,7 @@ typedef struct list_proxy T_list_proxy;
           Varios
 ******************************/
 void itowstatus(T_worker_status i, char *name);
+void itopstatus(T_proxy_status i, char *name);
 
 /*****************************
  	Sitio

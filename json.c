@@ -105,8 +105,11 @@ void json_servers(char **data, int *size, T_list_worker *workers, T_list_proxy *
 
 	T_worker *worker;
 	T_proxy *proxy;
+	char status[20];
 
-	strcpy(*data,"[");
+	*size = 100;
+	*data = (char *) realloc(*data,*size * sizeof(char));
+	strcpy(*data,"300|[");
 	list_worker_first(workers);
 	while(!list_worker_eol(workers)){
 		worker = list_worker_get(workers);
@@ -115,8 +118,9 @@ void json_servers(char **data, int *size, T_list_worker *workers, T_list_proxy *
 			*size = *size + 100;
 			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
-		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":0,\"status\":%i},",
-			*data,worker_get_id(worker),worker_get_name(worker),worker_get_status(worker));
+		itowstatus(worker_get_status(worker),status);
+		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":\"worker\",\"status\":\"%s\"},",
+			*data,worker_get_id(worker),worker_get_name(worker),status);
 		list_worker_next(workers);
 	}
 	list_proxy_first(proxys);
@@ -127,8 +131,9 @@ void json_servers(char **data, int *size, T_list_worker *workers, T_list_proxy *
 			*size = *size + 100;
 			*data = (char *) realloc(*data,*size * sizeof(char));
 		}
-		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":0,\"status\":%i},",
-			*data,proxy_get_id(proxy),proxy_get_name(proxy),proxy_get_status(proxy));
+		itopstatus(proxy_get_status(proxy),status);
+		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":\"proxy\",\"status\":\"%s\"},",
+			*data,proxy_get_id(proxy),proxy_get_name(proxy),status);
 		list_proxy_next(proxys);
 	}
 	(*data)[strlen(*data)-1] = ']';
@@ -144,6 +149,7 @@ int json_worker(char **data, int *size, T_worker *worker, T_db *db){
 	char *ipv4;
 	char *name;
 	char aux[100];
+	char status[10];
 	char id[40];
 
 	/* Por las dudas verificamos que data sea de al menos 1000 bytes */
@@ -153,11 +159,12 @@ int json_worker(char **data, int *size, T_worker *worker, T_db *db){
 	}
 	
 	if(worker == NULL){
-		strcpy(*data,"{\"name\":\"WORKER no existe\"}");
+		printf("JSON_WORKER: Worker no existe\n");
+		strcpy(*data,"300|{\"name\":\"WORKER no existe\"}");
 		return 1;
 	}
 	
-	strcpy(*data,"{\"name\":\"");
+	strcpy(*data,"200|{\"name\":\"");
 	strcat(*data,worker_get_name(worker));
 	strcat(*data,"\",\"id\":\"");
 	sprintf(aux,"%lu",worker_get_id(worker));
@@ -166,11 +173,15 @@ int json_worker(char **data, int *size, T_worker *worker, T_db *db){
 	sprintf(aux,"%s",worker_get_ipv4(worker));
 	strcat(*data,aux);
 	strcat(*data,"\",\"real_status\":\"");
-	sprintf(aux,"%i",worker_get_status(worker));
+	itowstatus(worker_get_status(worker),status);
+	sprintf(aux,"%s",status);
 	strcat(*data,aux);
+
+	printf("Llevamos de momento %s\n",*data);
 
 	/* Obtenemos de la base de datos informacion relevante */
 	if(!db_worker_get_info(db,worker_get_id(worker),aux)){
+		printf("Fallo al querer obtener db\n");
 		return 0;
 	}
 	strcat(*data,"\",");
@@ -213,7 +224,7 @@ int json_proxy(char **data, int *size, T_proxy *proxy, T_db *db){
 	char *ipv4;
 	char *name;
 	char aux[100];
-	char id[40];
+	char status[10];
 
 	/* Por las dudas verificamos que data sea de al menos 1000 bytes */
 	if(*size < 1000){
@@ -222,11 +233,11 @@ int json_proxy(char **data, int *size, T_proxy *proxy, T_db *db){
 	}
 	
 	if(proxy == NULL){
-		strcpy(*data,"{\"name\":\"PROXY no existe\"}");
+		strcpy(*data,"300|{\"name\":\"PROXY no existe\"}");
 		return 1;
 	}
 	
-	strcpy(*data,"{\"name\":\"");
+	strcpy(*data,"200|{\"name\":\"");
 	strcat(*data,proxy_get_name(proxy));
 	strcat(*data,"\",\"id\":\"");
 	sprintf(aux,"%lu",proxy_get_id(proxy));
@@ -234,8 +245,9 @@ int json_proxy(char **data, int *size, T_proxy *proxy, T_db *db){
 	strcat(*data,"\",\"ipv4\":\"");
 	sprintf(aux,"%s",proxy_get_ipv4(proxy));
 	strcat(*data,aux);
+	itopstatus(proxy_get_status(proxy),status);
 	strcat(*data,"\",\"real_status\":\"");
-	sprintf(aux,"%i",proxy_get_status(proxy));
+	sprintf(aux,"\"%s\"",status);
 	strcat(*data,aux);
 
 	/* Obtenemos de la base de datos informacion relevante */

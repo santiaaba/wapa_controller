@@ -226,7 +226,7 @@ void *server_listen(void *param){
 
 		// Aguardamos continuamente que el cliente envie un comando
 		while(recv_all_message(s,&recv_message,&recv_message_size)){
-			printf("Recibimos -%s-\n",recv_message);
+			printf("Recibimos del CORE-%s-\n",recv_message);
 			if(recv_message[0] == 't'){
 				/* nos solicitan el estado de un task */
 				pos=1;

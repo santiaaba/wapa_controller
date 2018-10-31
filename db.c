@@ -732,16 +732,19 @@ int db_worker_get_info(T_db *db, int id, char *data){
 	/* Retorna en formato json en *data informacion guardada
 	 * del worker. Retorna 0 si falla la conexion a la base */
 	char query[200];
+	char status[10];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
-	sprintf(query,"select s.status, w.size from web_server s inner join web_worker w on (s.id = w.id) where id = %i",id);
+	sprintf(query,"select s.status, w.size from web_server s inner join web_worker w on (s.id = w.id) where s.id = %i",id);
+	printf("query: %s\n",query);
 	if(mysql_query(db->con,query)){
 		return 0;
 	}
 	if(result = mysql_store_result(db->con)){
 		row = mysql_fetch_row(result);
-		sprintf(data,"\"status\":%s,\"size\":%s,",row[0],row[1]);
+		itowstatus(atoi(row[0]),status);
+		sprintf(data,"\"status\":\"%s\",\"size\":%s,",status,row[1]);
 	}
 	return 1;
 }
@@ -750,16 +753,18 @@ int db_proxy_get_info(T_db *db, int id, char *data){
 	/* Retorna en formato json en *data informacion guardada
 	 * del worker. Retorna 0 si falla la conexion a la base */
 	char query[200];
+	char status[10];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
 	sprintf(query,"select s.status from web_server s where id = %i",id);
-	if(mysql_query(db->con,query)){
+	printf("Query: %s\n",query);
+	if(mysql_query(db->con,query))
 		return 0;
-	}
 	if(result = mysql_store_result(db->con)){
 		row = mysql_fetch_row(result);
-		sprintf(data,"\"status\":%s,",row[0]);
+		itowstatus(atoi(row[0]),status);
+		sprintf(data,"\"status\":%s,",status);
 	}
 	return 1;
 }
