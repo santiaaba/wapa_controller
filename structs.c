@@ -351,6 +351,8 @@ int worker_add_site(T_worker *w, T_site *s){
 	}
 	if(ok)
 		send_message[strlen(send_message)-1] = '|';
+	else
+		strcat(send_message,"|");
 
 	// Armar los indices
 	printf("WORKER_ADD_SITE: armamos indices\n");

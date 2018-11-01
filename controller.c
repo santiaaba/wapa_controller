@@ -438,7 +438,7 @@ void main(){
 	printf("--FIN Sincronizamos workers--\n");
 
 	/* Iniciamos el server REST para la API */
-	server_init(&server,&sites,&workers,&proxys,&db,&logs);
+	server_init(&server,&sites,&workers,&proxys,&db,&config,&logs);
 	printf("El rest server posee puntero %p\n",server);
 
 	/* Comenzamos el loop del controller */

@@ -113,7 +113,7 @@ void task_site_show(T_task *t, T_db *db, T_logs *logs){
 	db_site_show(db,&(t->result),&(t->result_size),site_id,susc_id);
 }
 
-int task_site_add(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
+int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs *logs){
 	/* Agrega un sitio a la solucion */
 
 	T_site *newsite;
@@ -151,6 +151,12 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 		return 0;
 	}
 	sprintf(command,"mkdir -p /websites/%s/%s/logs",hash_dir,name);
+	if(system(command) != 0){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
+		return 0;
+	}
+	//Copiamos el archivo por defecto
+	sprintf(command,"cp -pr %s/* /websites/%s/%s/wwwroot/",config_default(config),hash_dir,name);
 	if(system(command) != 0){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
@@ -547,7 +553,7 @@ int task_server_start(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 }
 
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
-		T_list_proxy *proxys, T_db *db, T_logs *logs){
+		T_list_proxy *proxys, T_db *db, T_config *config, T_logs *logs){
 	/* Ejecuta el JOB */
 	t->status = T_RUNNING;
 
@@ -569,7 +575,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		case T_SITE_SHOW:
 			task_site_show(t,db,logs); break;
 		case T_SITE_ADD:
-			task_site_add(t,sites,db,logs); printf("paso case\n"); break;
+			task_site_add(t,sites,db,config,logs); break;
 		case T_SITE_DEL:
 			task_site_del(t,sites,db,logs); break;
 		case T_SITE_MOD:

@@ -31,9 +31,9 @@ void config_parce_line(char *buf, char *atr, char *val){
 int config_load(const char *filename, T_config *conf){
 	/* Lee de un archivo de configuracion */
 	FILE *fp;
-	char buf[200];
+	char buf[400];
 	char atr[20];
-	char val[20];
+	char val[200];
 
 	fp = fopen(filename,"r");
 	if(fp){
@@ -47,6 +47,7 @@ int config_load(const char *filename, T_config *conf){
 			if(0 == strcmp(&atr[0],"load_average")){conf->load_average = atoi(&val[0]);}
 			if(0 == strcmp(&atr[0],"sites_average")){conf->sites_average = atoi(&val[0]);}
 			if(0 == strcmp(&atr[0],"log_file")){strcpy(conf->logs_file,&val[0]);}
+			if(0 == strcmp(&atr[0],"default")){strcpy(conf->_default,&val[0]);}
 			if(0 == strcmp(&atr[0],"log_level")){conf->logs_level = logs_str2level(&val[0]);}
 		}
 		fclose(fp);
@@ -79,6 +80,9 @@ int config_sites_average(T_config *conf){
 }
 char *config_logs_file(T_config *conf){
 	return conf->logs_file;
+}
+char *config_default(T_config *conf){
+	return conf->_default;
 }
 T_logs_level config_logs_level(T_config *conf){
 	return conf->logs_level;

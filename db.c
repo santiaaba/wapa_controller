@@ -157,7 +157,7 @@ int db_load_site_index(T_db *db, T_site *site, char *site_id, char *error, int *
 	MYSQL_ROW row;
 	T_s_e *new_index;
 	
-	sprintf(query,"select id,name from web_indexes where site_id=%s\n",site_id);
+	sprintf(query,"select id,name from web_indexes where site_id=%s order by prioridad desc\n",site_id);
 	logs_write(db->logs,L_DEBUG,"db_load_sites_index", query);
 	if(mysql_query(db->con,query)){
 		/* Ocurrio un error */
@@ -350,11 +350,21 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
  	 * Si no pudo hacerlo retorna 0 sino 1
 	 * En el parametro dir retorna el directorio
 	 * obtenido de la suscripcion que le corresponde */
-
+	char index[6][15] = {
+				"default.html",
+				"index.htm",
+				"index.html",
+				"index.asp",
+				"index.aspx",
+				"index.php"
+	};
 	char query[300];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	unsigned int site_id;
+	unsigned int index_id;
+	T_s_e *newindex;
+	int i;
 
 	sprintf(query,"insert into web_site(version,name,size,susc_id) values(1,\"%s\",1,%lu)",
 		name,susc_id,dir);
@@ -389,6 +399,21 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
 		(*newsite) = (T_site *)malloc(sizeof(T_site));
 		site_init(*newsite,name,site_id,row[0],1,1);
 		strcpy(dir,row[0]);
+
+		/* Poblamos los indices */
+		for(i=5;i>=0;i--){
+			sprintf(query,"insert into web_indexes(site_id,name,prioridad) values(%i,'%s',%i)",
+				site_id,index[i],i);
+			if(mysql_query(db->con,query)){
+				logs_write(db->logs,L_ERROR,"db_site_add", "DB_ERROR");
+				*db_fail =1;
+				return 0;
+			}
+			index_id = mysql_insert_id(db->con);
+			newindex = (T_s_e *)malloc(sizeof(T_s_e));
+			s_e_init(newindex,index_id,index[i]);
+			list_s_e_add(site_get_alias(*newsite),newindex);
+		}
 		*db_fail =0;
 		return 1;
 	}

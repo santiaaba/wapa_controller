@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include "parce.h"
+#include "config.h"
 #include "structs.h"
 #include "json.h"
 #include "dictionary.h"
@@ -82,7 +83,7 @@ void task_init(T_task *t, T_task_type type, T_dictionary *data);
 void task_destroy(T_task **t);
 
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
-	      T_list_proxy *proxys,T_db *db, T_logs *logs);
+	      T_list_proxy *proxys,T_db *db, T_config *config, T_logs *logs);
 
 void task_done(T_task *t, char *message);
 

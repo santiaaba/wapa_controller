@@ -15,6 +15,7 @@ typedef struct config{
         char db_user[20];
         char db_pass[20];
         char logs_file[100];
+	char _default[200];
         T_logs_level logs_level;
 	char default_domain[100];
 	int load_average;
@@ -27,6 +28,7 @@ char *config_db_name(T_config *conf);
 char *config_db_user(T_config *conf);
 char *config_db_pass(T_config *conf);
 char *config_logs_file(T_config *conf);
+char *config_default(T_config *conf);
 T_logs_level config_logs_level(T_config *conf);
 char *config_default_domain(T_config *conf);
 int config_load_average(T_config *conf);

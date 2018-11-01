@@ -16,6 +16,179 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Current Database: `wapa`
+--
+
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `wapa` /*!40100 DEFAULT CHARACTER SET latin1 */;
+
+USE `wapa`;
+
+--
+-- Table structure for table `nube`
+--
+
+DROP TABLE IF EXISTS `nube`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `nube` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(40) NOT NULL,
+  `tipo` int(11) DEFAULT NULL,
+  `ipv4` varchar(15) DEFAULT NULL,
+  `user` varchar(50) DEFAULT NULL,
+  `pass` varchar(50) DEFAULT NULL,
+  `port` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `nube`
+--
+
+LOCK TABLES `nube` WRITE;
+/*!40000 ALTER TABLE `nube` DISABLE KEYS */;
+INSERT INTO `nube` VALUES (1,'webhosting',1,'10.120.78.181','wapa','sAn474226','8888');
+/*!40000 ALTER TABLE `nube` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `plan`
+--
+
+DROP TABLE IF EXISTS `plan`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `plan` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(50) DEFAULT NULL,
+  `status` int(11) NOT NULL DEFAULT '1',
+  `max` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `plan`
+--
+
+LOCK TABLES `plan` WRITE;
+/*!40000 ALTER TABLE `plan` DISABLE KEYS */;
+INSERT INTO `plan` VALUES (1,'dorado',1,1);
+/*!40000 ALTER TABLE `plan` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `plan_nube`
+--
+
+DROP TABLE IF EXISTS `plan_nube`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `plan_nube` (
+  `id_plan` int(11) NOT NULL,
+  `id_nube` int(11) NOT NULL,
+  PRIMARY KEY (`id_plan`,`id_nube`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `plan_nube`
+--
+
+LOCK TABLES `plan_nube` WRITE;
+/*!40000 ALTER TABLE `plan_nube` DISABLE KEYS */;
+INSERT INTO `plan_nube` VALUES (1,1);
+/*!40000 ALTER TABLE `plan_nube` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `suscription`
+--
+
+DROP TABLE IF EXISTS `suscription`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `suscription` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `status` int(11) NOT NULL DEFAULT '2',
+  `plan_id` int(11) DEFAULT NULL,
+  `last_action` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `suscription`
+--
+
+LOCK TABLES `suscription` WRITE;
+/*!40000 ALTER TABLE `suscription` DISABLE KEYS */;
+INSERT INTO `suscription` VALUES (30,29,'dorado',1,1,1);
+/*!40000 ALTER TABLE `suscription` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user`
+--
+
+DROP TABLE IF EXISTS `user`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(50) NOT NULL,
+  `pass` varchar(50) NOT NULL,
+  `email` varchar(100) DEFAULT NULL,
+  `status` int(11) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user`
+--
+
+LOCK TABLES `user` WRITE;
+/*!40000 ALTER TABLE `user` DISABLE KEYS */;
+INSERT INTO `user` VALUES (29,'santiaaba','qwerty1234','santiaaba@hotmail.com',1);
+/*!40000 ALTER TABLE `user` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `version`
+--
+
+DROP TABLE IF EXISTS `version`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `version` (
+  `number` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `version`
+--
+
+LOCK TABLES `version` WRITE;
+/*!40000 ALTER TABLE `version` DISABLE KEYS */;
+INSERT INTO `version` VALUES (0);
+/*!40000 ALTER TABLE `version` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Current Database: `wapa_web`
+--
+
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `wapa_web` /*!40100 DEFAULT CHARACTER SET latin1 */;
+
+USE `wapa_web`;
+
+--
 -- Table structure for table `ftpgroup`
 --
 
@@ -131,30 +304,25 @@ INSERT INTO `ftpuser` VALUES (1,'sdiaz','sAn474226',2001,2001,'/websites/00/00/s
 UNLOCK TABLES;
 
 --
--- Table structure for table `suscription`
+-- Table structure for table `version`
 --
 
-DROP TABLE IF EXISTS `suscription`;
+DROP TABLE IF EXISTS `version`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `suscription` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `user_id` int(11) NOT NULL,
-  `name` varchar(50) NOT NULL,
-  `status` int(11) DEFAULT NULL,
-  `plan_id` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
+CREATE TABLE `version` (
+  `number` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `suscription`
+-- Dumping data for table `version`
 --
 
-LOCK TABLES `suscription` WRITE;
-/*!40000 ALTER TABLE `suscription` DISABLE KEYS */;
-INSERT INTO `suscription` VALUES (1,1,'demo',2,1),(3,1,'dorado',0,1);
-/*!40000 ALTER TABLE `suscription` ENABLE KEYS */;
+LOCK TABLES `version` WRITE;
+/*!40000 ALTER TABLE `version` DISABLE KEYS */;
+INSERT INTO `version` VALUES (0);
+/*!40000 ALTER TABLE `version` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -169,7 +337,7 @@ CREATE TABLE `web_alias` (
   `site_id` int(11) DEFAULT NULL,
   `alias` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -192,8 +360,9 @@ CREATE TABLE `web_indexes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `site_id` int(11) DEFAULT NULL,
   `name` varchar(50) DEFAULT NULL,
+  `prioridad` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -202,34 +371,36 @@ CREATE TABLE `web_indexes` (
 
 LOCK TABLES `web_indexes` WRITE;
 /*!40000 ALTER TABLE `web_indexes` DISABLE KEYS */;
+INSERT INTO `web_indexes` VALUES (19,31,'default.html',0),(20,31,'index.htm',1),(21,31,'index.html',2),(22,31,'index.asp',3),(23,31,'index.aspx',4),(24,31,'index.php',5);
 /*!40000 ALTER TABLE `web_indexes` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `web_proxy`
+-- Table structure for table `web_server`
 --
 
-DROP TABLE IF EXISTS `web_proxy`;
+DROP TABLE IF EXISTS `web_server`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `web_proxy` (
+CREATE TABLE `web_server` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `ipv4` varchar(15) NOT NULL,
   `status` int(11) NOT NULL DEFAULT '0',
+  `rol` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `web_proxy`
+-- Dumping data for table `web_server`
 --
 
-LOCK TABLES `web_proxy` WRITE;
-/*!40000 ALTER TABLE `web_proxy` DISABLE KEYS */;
-INSERT INTO `web_proxy` VALUES (1,'proxy01','10.120.78.217',0);
-/*!40000 ALTER TABLE `web_proxy` ENABLE KEYS */;
+LOCK TABLES `web_server` WRITE;
+/*!40000 ALTER TABLE `web_server` DISABLE KEYS */;
+INSERT INTO `web_server` VALUES (1,'worker01','10.120.78.213',0,0),(3,'worker02','10.120.78.214',0,0),(4,'proxy01','10.120.78.217',0,1);
+/*!40000 ALTER TABLE `web_server` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -248,7 +419,7 @@ CREATE TABLE `web_site` (
   `status` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -257,7 +428,7 @@ CREATE TABLE `web_site` (
 
 LOCK TABLES `web_site` WRITE;
 /*!40000 ALTER TABLE `web_site` DISABLE KEYS */;
-INSERT INTO `web_site` VALUES (2,1,'sitio2',1,1,0),(6,1,'unamas',1,1,0),(10,1,'unamasyvan2',1,1,0),(11,1,'sitio4',1,1,0),(12,1,'sitio5',1,1,0),(13,1,'sitio1',1,1,0);
+INSERT INTO `web_site` VALUES (31,1,'sitio3',1,30,0);
 /*!40000 ALTER TABLE `web_site` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -272,7 +443,7 @@ CREATE TABLE `web_suscription` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `hash_dir` varchar(5) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -281,7 +452,7 @@ CREATE TABLE `web_suscription` (
 
 LOCK TABLES `web_suscription` WRITE;
 /*!40000 ALTER TABLE `web_suscription` DISABLE KEYS */;
-INSERT INTO `web_suscription` VALUES (1,'00/00'),(3,'92/02');
+INSERT INTO `web_suscription` VALUES (30,'92/49');
 /*!40000 ALTER TABLE `web_suscription` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -293,13 +464,9 @@ DROP TABLE IF EXISTS `web_worker`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `web_worker` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) NOT NULL,
-  `ipv4` varchar(15) NOT NULL,
-  `status` int(11) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
+  `id` int(11) NOT NULL,
+  `size` int(11) NOT NULL DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -308,7 +475,7 @@ CREATE TABLE `web_worker` (
 
 LOCK TABLES `web_worker` WRITE;
 /*!40000 ALTER TABLE `web_worker` DISABLE KEYS */;
-INSERT INTO `web_worker` VALUES (1,'worker01','10.120.78.213',0),(3,'worker02','10.120.78.214',0);
+INSERT INTO `web_worker` VALUES (1,0),(3,0);
 /*!40000 ALTER TABLE `web_worker` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -321,4 +488,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-09-26 14:54:12
+-- Dump completed on 2018-11-01 15:40:40

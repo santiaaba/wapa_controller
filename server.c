@@ -42,7 +42,7 @@ void *server_do_task(void *param){
 		pthread_mutex_unlock(&(s->mutex_heap_task));
 		if(task != NULL){
 			pthread_mutex_lock(&(s->mutex_lists));
-				task_run(task,s->sites,s->workers,s->proxys,s->db,s->logs);
+				task_run(task,s->sites,s->workers,s->proxys,s->db,s->config,s->logs);
 			pthread_mutex_unlock(&(s->mutex_lists));
 			pthread_mutex_lock(&(s->mutex_bag_task));
 				bag_task_add(&(s->tasks_done),task);
@@ -249,12 +249,13 @@ void *server_listen(void *param){
 }
 
 void server_init(T_server *s, T_list_site *sites, T_list_worker *workers,
-	T_list_proxy *proxys, T_db *db, T_logs *logs){
+	T_list_proxy *proxys, T_db *db, T_config *config, T_logs *logs){
 
 	s->sites = sites;
 	s->proxys = proxys;
 	s->workers = workers;
 	s->db = db;
+	s->config = config;
 	s->logs = logs;
 	heap_task_init(&(s->tasks_todo));
 	bag_task_init(&(s->tasks_done));
