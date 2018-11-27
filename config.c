@@ -49,6 +49,8 @@ int config_load(const char *filename, T_config *conf){
 			if(0 == strcmp(&atr[0],"log_file")){strcpy(conf->logs_file,&val[0]);}
 			if(0 == strcmp(&atr[0],"default")){strcpy(conf->_default,&val[0]);}
 			if(0 == strcmp(&atr[0],"log_level")){conf->logs_level = logs_str2level(&val[0]);}
+			if(0 == strcmp(&atr[0],"webdir")){strcpy(conf->webdir,&val[0]);}
+			if(0 == strcmp(&atr[0],"ftpuid")){strcpy(conf->ftpuid,&val[0]);}
 		}
 		fclose(fp);
 		return 1;
@@ -83,6 +85,12 @@ char *config_logs_file(T_config *conf){
 }
 char *config_default(T_config *conf){
 	return conf->_default;
+}
+char *config_webdir(T_config *conf){
+	return conf->webdir;
+}
+char *config_ftpuid(T_config *conf){
+	return conf->ftpuid;
 }
 T_logs_level config_logs_level(T_config *conf){
 	return conf->logs_level;

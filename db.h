@@ -39,32 +39,27 @@ int db_find_site(T_db *db, char *name);
 
 /* Para los sitios */
 int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail );
-
 int db_site_add(T_db *db, T_site **newsite, char *name,
 		unsigned int susc_id, char *dir, char *error,
 		int *db_fail);
 
 int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fail);
-
-void db_site_list(T_db *db, char **data, int *data_size, char *susc_id);
-
-int db_site_del(T_db *db, char *site_id, char *error, int *db_fail);
-
+void db_site_list(T_db *db, char **data, char *susc_id);
+int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fail);
 uint16_t db_site_exist(T_db *db, char *susc_id, char *site_id, char *error, int *db_fail);
-
-void db_site_show(T_db *db, char **data, int *data_size, char *site_id, char *susc_id);
-
+void db_site_show(T_db *db, char **data, char *site_id, char *susc_id);
 int db_site_status(T_db *db, char *susc_id, char *site_id, char *status, char *error, int *db_fail);
-
 int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail);
-
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name,char *error, int *db_fail);
+
+/* Para los usuarios ftp */
+int db_ftp_list(T_db *db, char **data, char *site_id);
+int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail);
+int db_ftp_del(T_db *db, char *ftp_id, char *error, int *db_fail);
 
 /* Para las suscripcionse */
 int db_susc_show(T_db *db,char *susc_id,char **message,int *db_fail);
-
-int db_susc_add(T_db *db, char *susc_id, int *db_fail);
-
+int db_susc_add(T_db *db, T_dictionary *d, int *db_fail);
 int db_susc_del(T_db *db, char *susc_id);
 
 

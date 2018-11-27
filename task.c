@@ -51,6 +51,71 @@ T_task_type task_c_to_type(char c){
 	}
 }
 
+/****************************************
+	     Verificadiones
+*****************************************/
+int task_verify_susc_add(T_task *t){
+	return ( dictionary_get(t->data,"usc_id") &&
+	         dictionary_get(t->data,"size"));
+}
+
+/* Este es mas generico ya que la mayoria de los task sobre
+ * suscripciones solo necesita el id de suscripcion */
+int task_verify_susc(T_task *t){
+	return (dictionary_get(t->data,"susc_id") != NULL);
+}
+
+/* Este es mas generico ya que la mayoria de los task sobre
+ * sitios solo necesita el id de sitio */
+int task_verify_site(T_task *t){
+	return (dictionary_get(t->data,"site_id") != NULL);
+}
+
+int task_verify_site_show(T_task *t){
+	return ((dictionary_get(t->data,"susc_id") &&
+		 dictionary_get(t->data,"site_id"));
+}
+
+int task_verify_site_add(T_task *t){
+	return ((dictionary_get(t->data,"susc_id") &&
+		 dictionary_get(t->data,"name"));
+}
+
+int task_verify_site_start(T_task *t){
+	return ((dictionary_get(t->data,"susc_id") &&
+		 dictionary_get(t->data,"site_id") &&
+		 dictionary_get(t->data,"status"));
+}
+
+int task_verify_site_stop(T_task *t){
+	return ((dictionary_get(t->data,"susc_id") &&
+		 dictionary_get(t->data,"site_id") &&
+		 dictionary_get(t->data,"status"));
+}
+
+int task_verify_site_mod(T_task *t){
+	/* Site mod puede recibir ademas otros parametros
+	 * ademas de los siguientes pero son optativos */
+	return ((dictionary_get(t->data,"susc_id") &&
+		 dictionary_get(t->data,"site_id") &&
+		 dictionary_get(t->data,"version"));
+}
+
+/* Este es mas generico ya que la mayoria de los task sobre
+ * sitios solo necesita el id de sitio */
+int task_verify_server(T_task *t){
+	return (dictionary_get(t->data,"server_id") != NULL);
+}
+
+int task_verify_ftp(T_task *t){
+	return (dictionary_get(t->data,"site_id");
+}
+
+int task_verify_ftp_add(T_task *t){
+	return ((dictionary_get(t->data,"site_id") &&
+		 dictionary_get(t->data,"user_id") &&
+		 dictionary_get(t->data,"passwd"));
+}
 
 /*****************************
 	     TASK 
@@ -61,7 +126,6 @@ void task_init(T_task *t, T_task_type type, T_dictionary *data){
 	t->type = type;
 	t->data = data;
 	t->result = NULL;
-	t->result_size = 0;
 }
 
 void task_destroy(T_task **t){
@@ -86,9 +150,8 @@ char *task_get_id(T_task *t){
 
 void task_done(T_task *t, char *message){
 	t->status = T_DONE;
-	t->result_size = strlen(message) + 1;	// El +1 es lara el "\0" del final del string
 	printf("Allocamos espacio\n");
-	t->result=(char *)realloc(t->result,t->result_size);
+	t->result=(char *)realloc(t->result,strlen(message) + 1);
 	printf("Copiamos mensaje -%s-\n",message);
 	strcpy(t->result,message);
 }
@@ -97,8 +160,12 @@ void task_site_list(T_task *t, T_db *db, T_logs *logs){
 	/* Lista sitios de una suscripcion dada */
 	char *susc_id;
 
+	if(!task_verify_susc(t)){	// Si bien es para una suscripcion...
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 	susc_id = dictionary_get(t->data,"susc_id");
-	db_site_list(db,&(t->result),&(t->result_size),susc_id);
+	db_site_list(db,&(t->result),susc_id);
 	/* Falta agregar una lista de los workers donde esta
  	   cada site */
 }
@@ -108,9 +175,13 @@ void task_site_show(T_task *t, T_db *db, T_logs *logs){
 	char *susc_id;
 	T_site *site;
 
+	if(!task_verify_site_show(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 	site_id = dictionary_get(t->data,"site_id");
 	susc_id = dictionary_get(t->data,"susc_id");
-	db_site_show(db,&(t->result),&(t->result_size),site_id,susc_id);
+	db_site_show(db,&(t->result),site_id,susc_id);
 }
 
 int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs *logs){
@@ -126,7 +197,11 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	char hash_dir[6];
 	unsigned int id;
 	
-	printf("Agregar un sitio nuevo\n");
+	
+	if(!task_verify_site_add(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 	dictionary_print(t->data);
 	name = dictionary_get(t->data,"name");
 	susc_id = dictionary_get(t->data,"susc_id");
@@ -145,18 +220,19 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 
 	// Creacion del espacio de almacenamiento
 	printf("Creacion de directorios\n");
-	sprintf(command,"mkdir -p /websites/%s/%s/wwwroot",hash_dir,name);
+	sprintf(command,"mkdir -p /%s/%s/%s/wwwroot",hash_dir,name,config_website(config));
 	if(system(command) != 0){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
-	sprintf(command,"mkdir -p /websites/%s/%s/logs",hash_dir,name);
+	sprintf(command,"mkdir -p /%s/%s/%s/logs",hash_dir,name,config_website(config));
 	if(system(command) != 0){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
 	}
 	//Copiamos el archivo por defecto
-	sprintf(command,"cp -pr %s/* /websites/%s/%s/wwwroot/",config_default(config),hash_dir,name);
+	sprintf(command,"cp -pr %s/* /%s/%s/%s/wwwroot/",config_default(config),
+		hash_dir,name,config_website(config));
 	if(system(command) != 0){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
 		return 0;
@@ -170,7 +246,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	return 1;
 }
 
-int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
+int task_site_del(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs *logs){
 	/* Borra fisicamente y logicamente un sitio.
  	 * si pudo borrarlo retorna 1. Si no pudo o
  	 * fue borrado parcialmente retorna 0 */
@@ -180,14 +256,16 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	char command[200];
 	char *site_id;
 	int db_fail;
+	uint32_t size;
 	T_site *site = NULL;
 	T_worker *worker;
 
-	printf("task_site_del\n");
+	if(!task_verify_site(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 
 	site_id = dictionary_get(t->data,"site_id");
-	printf("pasamos %s\n",site_id);
-
 	if(!db_get_hash_dir(db,site_id,hash_dir,site_name,error,&db_fail)){
 		if(db_fail){
 			task_done(t,ERROR_FATAL);
@@ -196,9 +274,18 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 		}
 		return 0;
 	}
+
 	printf("Tenemos el hash\n");
-	/* Borramos de la base de datos el sitio, indices y alias*/
-	if(!db_site_del(db,site_id,error,&db_fail)){
+	/* Borramos de la base de datos el sitio, indices, alias,
+ 	   usuarios ftp y recuperamos espacio en disco */
+	sprintf(command,"du -bs /%s/%s/%s",config_webdir(c),hash_dir,site_name);
+	logs_write(logs,L_DEBUG,"task_site_del",command);
+	if(system(command) != 0){
+		logs_write(logs,L_ERROR,"task_site_del","Imposible obtener el size");
+		task_done(t,ERROR_FATAL);
+		return 0;
+	}
+	if(!db_site_del(db,site_id,size,error,&db_fail)){
 		task_done(t,ERROR_FATAL);
 		return 0;
 	}
@@ -240,6 +327,10 @@ int task_susc_show(T_task *t, T_db *db, T_logs *logs){
 	int db_fail;
 	char *message=NULL;
 
+	if(!task_verify_susc(t)){
+                task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+                return;
+        }
 	if(db_susc_show(db,dictionary_get(t->data,"susc_id"),&message,&db_fail)){
 		task_done(t,message);
 	} else {
@@ -248,11 +339,16 @@ int task_susc_show(T_task *t, T_db *db, T_logs *logs){
 	
 }
 
-int task_susc_add(T_task *t, T_db *db, T_logs *logs){
+void task_susc_add(T_task *t, T_db *db, T_logs *logs){
 	/* Agrega una suscripcion */
 	int db_fail;
 
-	if(db_susc_add(db,dictionary_get(t->data,"susc_id"),&db_fail)){
+	if(!task_verify_susc(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+	}
+
+	if(db_susc_add(db,t->data,&db_fail)){
 		task_done(t,"200|\"code\":\"202\",\"info\":\"Suscripcion Agregada\"");
 	} else {
 		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
@@ -272,6 +368,10 @@ void task_susc_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	char error[200];
 	int db_fail;
 
+	if(!task_verify_susc(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+	}
 	susc_id = dictionary_get(t->data,"susc_id");
 	if(strcmp(susc_id,"") != 0){
 		printf("task_susc_del\n");
@@ -320,6 +420,11 @@ void task_susc_stop(T_task *t, T_list_site *l, T_db *db){
 	int db_fail;
 	int ok;
 
+	if(!task_verify_susc(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+	}
+
 	printf("task_susc_stop\n");
 	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
@@ -358,6 +463,11 @@ void task_susc_start(T_task *t, T_list_site *l, T_db *db){
 	int db_fail;
 	int ok;
 
+	if(!task_verify_susc(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+	}
+
 	printf("task_susc_start\n");
 	task_aux = (T_task *)malloc(sizeof(T_task));
 	susc_id = dictionary_get(t->data,"susc_id");
@@ -390,6 +500,11 @@ int task_site_stop(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	int db_fail;
 	T_site *site;
 
+	if(!task_verify_site_stop(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
+
 	if(!db_site_status(db,dictionary_get(t->data,"susc_id"),
 	   dictionary_get(t->data,"site_id"),
 	   dictionary_get(t->data,"status"),error,&db_fail)){
@@ -410,6 +525,11 @@ int task_site_start(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	char error[200];
 	int db_fail;
 	T_site *site;
+
+	if(!task_verify_site_start(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 
 	if(!db_site_status(db,dictionary_get(t->data,"susc_id"),
 	   dictionary_get(t->data,"site_id"),
@@ -435,8 +555,10 @@ void task_site_mod(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 	char error[200];
 	char aux[40];
 
-	printf("Modificamos un sitio\n");
-        dictionary_print(t->data);
+	if(!task_verify_site_mod(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 
 	/* Verificamos que el sitio corresponda al suscriber_id */
 	version = db_site_exist(db,dictionary_get(t->data,"susc_id"),
@@ -470,11 +592,43 @@ void task_site_mod(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 }
 
 /*************************************************
+ * 		TASK FTP
+ *************************************************/
+
+void task_ftp_list(T_task *t, T_db *db){
+
+	if(!task_verify_ftp(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
+
+	db_ftp_list(db,&(t->result),dictionary_get(t->data,"site_id"));
+}
+
+void task_ftp_add(T_task *t, T_db *db){
+	/* Agrega usuario secundario al sitio */
+	if(!task_verify_ftp_add(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
+}
+
+void task_ftp_del(T_task *t, T_db *db){
+	/* Elimina usuario secundario de un sitio */
+}
+
+void task_ftp_mod(T_task *t, T_db *db){
+	/* Modifica parte del nombre y pass del usuario
+	 * sea principal o secundario */
+	
+}
+
+/*************************************************
  * 		TASK SERVER
  *************************************************/
 
 void task_server_list(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
-	json_servers(&(t->result),&(t->result_size),lw,lp,db);
+	json_servers(&(t->result),lw,lp,db);
 }
 
 void task_server_show(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
@@ -483,19 +637,24 @@ void task_server_show(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 	T_worker *worker = NULL;
 	T_proxy *proxy = NULL;
 
+	if(!task_verify_server(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
+
 	id = dictionary_get(t->data,"server_id");
 	printf("TASK_SERVER_SHOW: Info del server id=%s\n",id);
 	worker = list_worker_find_id(lw,atoi(id));
 	if(worker){
 		printf("Es un worker\n");
-		if(!json_worker(&(t->result),&(t->result_size),worker,db)){
+		if(!json_worker(&(t->result),worker,db)){
 			task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR base de datos\"");
 		}
 	} else {
 		printf("Es un proxy\n");
 		proxy = list_proxy_find_id(lp,atoi(id));
 		if(proxy){
-			if(!json_proxy(&(t->result),&(t->result_size),proxy,db)){
+			if(!json_proxy(&(t->result),proxy,db)){
 				task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR base de datos\"");
 			}
 		} else {
@@ -510,6 +669,11 @@ int task_server_stop(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 	char *id;
 	T_worker *worker = NULL;
 	T_proxy *proxy = NULL;
+
+	if(!task_verify_server(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 
 	id = dictionary_get(t->data,"server_id");
 	printf("TASK_SERVER_STOP: Deteniendo server id=%s\n",id);
@@ -534,6 +698,11 @@ int task_server_start(T_task *t, T_db *db, T_list_worker *lw, T_list_proxy *lp){
 	char *id;
 	T_worker *worker = NULL;
 	T_proxy *proxy = NULL;
+
+	if(!task_verify_server(t)){
+		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
+		return;
+        }
 
 	id = dictionary_get(t->data,"server_id");
 	printf("TASK_SERVER_START: Iniciando server id=%s\n",id);
@@ -577,7 +746,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		case T_SITE_ADD:
 			task_site_add(t,sites,db,config,logs); break;
 		case T_SITE_DEL:
-			task_site_del(t,sites,db,logs); break;
+			task_site_del(t,sites,db,config,logs); break;
 		case T_SITE_MOD:
 			task_site_mod(t,sites,db,logs); break;
 		case T_SITE_STOP:
@@ -593,6 +762,16 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 			task_server_stop(t,db,workers,proxys); break;
 		case T_SERVER_START:
 			task_server_start(t,db,workers,proxys); break;
+
+		case T_FTP_LIST:
+			task_ftp_list(t,db); break;
+		case T_FTP_ADD:
+			task_ftp_add(t,db); break;
+		case T_FTP_DEL:
+			task_ftp_del(t,db); break;
+		case T_FTP_MOD:
+			task_ftp_mod(t,db); break;
+
 		default:
 			printf("ERROR FATAL. TASK_TYPE indefinido\n");
 
@@ -769,4 +948,3 @@ void bag_task_print(T_bag_task *b){
 	}
 	printf("END PRINT BAG\n");
 }
-

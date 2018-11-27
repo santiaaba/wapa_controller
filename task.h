@@ -43,7 +43,12 @@ typedef enum {
 		T_SERVER_MOD,
 		T_SERVER_DEL,
 		T_SERVER_STOP,
-		T_SERVER_START
+		T_SERVER_START,
+
+		T_FTP_LIST,
+		T_FTP_ADD,
+		T_FTP_DEL,
+		T_FTP_MOD
 } T_task_type;
 
 typedef enum { T_WHAITING,
@@ -73,7 +78,6 @@ typedef struct {
 	T_task_status status;		//estado del task
 	T_dictionary *data;		//datos necesarios para realizar la accion
 	char *result;			//resultado a retornar
-	unsigned int result_size;	//datos para realizar la accion
 } T_task;
 
 T_task_type task_c_to_type(char c);
