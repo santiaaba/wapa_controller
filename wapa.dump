@@ -209,6 +209,7 @@ CREATE TABLE `ftpgroup` (
 
 LOCK TABLES `ftpgroup` WRITE;
 /*!40000 ALTER TABLE `ftpgroup` DISABLE KEYS */;
+INSERT INTO `ftpgroup` VALUES ('grupo_30',30,'');
 /*!40000 ALTER TABLE `ftpgroup` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -239,6 +240,7 @@ CREATE TABLE `ftpquotalimits` (
 
 LOCK TABLES `ftpquotalimits` WRITE;
 /*!40000 ALTER TABLE `ftpquotalimits` DISABLE KEYS */;
+INSERT INTO `ftpquotalimits` VALUES ('grupo_30','group','false','hard',0,0,1048576,0,0,0);
 /*!40000 ALTER TABLE `ftpquotalimits` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -267,6 +269,7 @@ CREATE TABLE `ftpquotatallies` (
 
 LOCK TABLES `ftpquotatallies` WRITE;
 /*!40000 ALTER TABLE `ftpquotatallies` DISABLE KEYS */;
+INSERT INTO `ftpquotatallies` VALUES ('grupo_30','group',0,0,859790,0,0,0);
 /*!40000 ALTER TABLE `ftpquotatallies` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -288,9 +291,11 @@ CREATE TABLE `ftpuser` (
   `count` int(11) NOT NULL DEFAULT '0',
   `accessed` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `modified` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `site_id` int(10) unsigned NOT NULL,
+  `admin` enum('false','true') NOT NULL DEFAULT 'false',
   PRIMARY KEY (`id`),
   UNIQUE KEY `userid` (`userid`)
-) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=latin1 COMMENT='ProFTP user table';
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=latin1 COMMENT='ProFTP user table';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -299,7 +304,7 @@ CREATE TABLE `ftpuser` (
 
 LOCK TABLES `ftpuser` WRITE;
 /*!40000 ALTER TABLE `ftpuser` DISABLE KEYS */;
-INSERT INTO `ftpuser` VALUES (1,'sdiaz','sAn474226',2001,2001,'/websites/00/00/sitio1','/sbin/nologin',11,'2018-09-04 15:18:02','2018-09-04 15:11:14');
+INSERT INTO `ftpuser` VALUES (1,'sdiaz/sitio3','sAn474226',2001,30,'/websites/92/49/sitio3','/sbin/nologin',63,'2018-11-27 10:04:02','2018-11-27 09:42:32',31,'false'),(2,'rocio/sitio3','sAn474226',2001,30,'/websites/92/49/sitio3','/sbin/nologin',2,'2018-11-27 09:16:50','2018-11-27 09:16:59',31,'false');
 /*!40000 ALTER TABLE `ftpuser` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -337,7 +342,7 @@ CREATE TABLE `web_alias` (
   `site_id` int(11) DEFAULT NULL,
   `alias` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -488,4 +493,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-11-01 15:40:40
+-- Dump completed on 2018-11-28 11:48:21

@@ -41,6 +41,11 @@ T_task_type task_c_to_type(char c){
 		case 'k': return T_SITE_STOP;
 		case 'e': return T_SITE_START;
 
+		case 'b': return T_FTP_LIST;
+		case 'c': return T_FTP_ADD;
+		case 'f': return T_FTP_DEL;
+		case 'g': return T_FTP_MOD;
+
 		case 'L': return T_SERVER_LIST;
 		case 'S': return T_SERVER_SHOW;
 		case 'A': return T_SERVER_ADD;
@@ -72,33 +77,33 @@ int task_verify_site(T_task *t){
 }
 
 int task_verify_site_show(T_task *t){
-	return ((dictionary_get(t->data,"susc_id") &&
-		 dictionary_get(t->data,"site_id"));
+	return (dictionary_get(t->data,"susc_id") &&
+		dictionary_get(t->data,"site_id"));
 }
 
 int task_verify_site_add(T_task *t){
-	return ((dictionary_get(t->data,"susc_id") &&
-		 dictionary_get(t->data,"name"));
+	return (dictionary_get(t->data,"susc_id") &&
+		dictionary_get(t->data,"name"));
 }
 
 int task_verify_site_start(T_task *t){
-	return ((dictionary_get(t->data,"susc_id") &&
-		 dictionary_get(t->data,"site_id") &&
-		 dictionary_get(t->data,"status"));
+	return (dictionary_get(t->data,"susc_id") &&
+		dictionary_get(t->data,"site_id") &&
+		dictionary_get(t->data,"status"));
 }
 
 int task_verify_site_stop(T_task *t){
-	return ((dictionary_get(t->data,"susc_id") &&
-		 dictionary_get(t->data,"site_id") &&
-		 dictionary_get(t->data,"status"));
+	return (dictionary_get(t->data,"susc_id") &&
+		dictionary_get(t->data,"site_id") &&
+		dictionary_get(t->data,"status"));
 }
 
 int task_verify_site_mod(T_task *t){
 	/* Site mod puede recibir ademas otros parametros
 	 * ademas de los siguientes pero son optativos */
-	return ((dictionary_get(t->data,"susc_id") &&
-		 dictionary_get(t->data,"site_id") &&
-		 dictionary_get(t->data,"version"));
+	return (dictionary_get(t->data,"susc_id") &&
+		dictionary_get(t->data,"site_id") &&
+		dictionary_get(t->data,"version"));
 }
 
 /* Este es mas generico ya que la mayoria de los task sobre
@@ -107,14 +112,14 @@ int task_verify_server(T_task *t){
 	return (dictionary_get(t->data,"server_id") != NULL);
 }
 
-int task_verify_ftp(T_task *t){
-	return (dictionary_get(t->data,"site_id");
+int task_verify_ftp_list(T_task *t){
+	return (dictionary_get(t->data,"site_id") != NULL);
 }
 
 int task_verify_ftp_add(T_task *t){
-	return ((dictionary_get(t->data,"site_id") &&
-		 dictionary_get(t->data,"user_id") &&
-		 dictionary_get(t->data,"passwd"));
+	return (dictionary_get(t->data,"site_id") &&
+		dictionary_get(t->data,"user_id") &&
+		dictionary_get(t->data,"passwd"));
 }
 
 /*****************************
@@ -219,24 +224,25 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	}
 
 	// Creacion del espacio de almacenamiento
-	printf("Creacion de directorios\n");
-	sprintf(command,"mkdir -p /%s/%s/%s/wwwroot",hash_dir,name,config_website(config));
-	if(system(command) != 0){
-		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		return 0;
-	}
-	sprintf(command,"mkdir -p /%s/%s/%s/logs",hash_dir,name,config_website(config));
-	if(system(command) != 0){
-		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		return 0;
-	}
-	//Copiamos el archivo por defecto
+	sprintf(command,"mkdir -p /%s/%s/%s/wwwroot",hash_dir,name,config_webdir(config));
+	SYSTEM_DO
+
+	sprintf(command,"mkdir -p /%s/%s/%s/logs",hash_dir,name,config_webdir(config));
+	SYSTEM_DO
+
+	sprintf(command,"chown -R ftpuser:root -p /%s/%s/%s",hash_dir,name,config_webdir(config));
+	SYSTEM_DO
+
+	sprintf(command,"chmod -R 755 -p /%s/%s/%s",hash_dir,name,config_webdir(config));
+	SYSTEM_DO
+
+	sprintf(command,"chmod -R 555 -p /%s/%s/%s/logs",hash_dir,name,config_webdir(config));
+	SYSTEM_DO
+
 	sprintf(command,"cp -pr %s/* /%s/%s/%s/wwwroot/",config_default(config),
-		hash_dir,name,config_website(config));
-	if(system(command) != 0){
-		task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\"");
-		return 0;
-	}
+	hash_dir,name,config_webdir(config));
+	SYSTEM_DO
+
 
 	// Adicion del sitio a la lista
 	printf("agregado al listado\n");
@@ -246,7 +252,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	return 1;
 }
 
-int task_site_del(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs *logs){
+int task_site_del(T_task *t, T_list_site *l, T_db *db, T_config *c, T_logs *logs){
 	/* Borra fisicamente y logicamente un sitio.
  	 * si pudo borrarlo retorna 1. Si no pudo o
  	 * fue borrado parcialmente retorna 0 */
@@ -279,12 +285,7 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	/* Borramos de la base de datos el sitio, indices, alias,
  	   usuarios ftp y recuperamos espacio en disco */
 	sprintf(command,"du -bs /%s/%s/%s",config_webdir(c),hash_dir,site_name);
-	logs_write(logs,L_DEBUG,"task_site_del",command);
-	if(system(command) != 0){
-		logs_write(logs,L_ERROR,"task_site_del","Imposible obtener el size");
-		task_done(t,ERROR_FATAL);
-		return 0;
-	}
+	SYSTEM_DO
 	if(!db_site_del(db,site_id,size,error,&db_fail)){
 		task_done(t,ERROR_FATAL);
 		return 0;
@@ -308,12 +309,8 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 
 	/* Lo borramos fisicamente de la estructura de directorios */
 	sprintf(command,"rm -rf /websites/%s/%s",hash_dir,site_name);
-	logs_write(logs,L_DEBUG,"task_site_del",command);
-	if(system(command) != 0){
-		logs_write(logs,L_ERROR,"task_site_del","Imposible borrar el directorio");
-		task_done(t,ERROR_FATAL);
-		return 0;
-	}
+	SYSTEM_DO
+
 	printf("Borramos del directorio\n");
 
 	task_done(t,"200|\"code\":\"202\",\"info\":\"Sitio borrado\"");
@@ -355,7 +352,7 @@ void task_susc_add(T_task *t, T_db *db, T_logs *logs){
 	}
 }
 
-void task_susc_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
+void task_susc_del(T_task *t, T_list_site *l, T_db *db, T_config *c, T_logs *logs){
 	/* Elimina una suscripcion y todos sus datos */
 	/* Retorna 1 si pudo borrar todo. Caso contrario retorna 0 */
 	int site_ids[256];	//256 es la maxima cantidad de sitios por suscripcion
@@ -390,7 +387,7 @@ void task_susc_del(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 				sprintf(site_id,"%i",site_ids[site_ids_len - 1 ]);
 				dictionary_add(task_aux->data,"site_id",site_id);
 				dictionary_print(task_aux->data);
-				ok &= task_site_del(task_aux,l,db,logs);
+				ok &= task_site_del(task_aux,l,db,c,logs);
 				dictionary_remove(task_aux->data,"site_id");
 				site_ids_len--;
 			}
@@ -597,7 +594,7 @@ void task_site_mod(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 
 void task_ftp_list(T_task *t, T_db *db){
 
-	if(!task_verify_ftp(t)){
+	if(!task_verify_ftp_list(t)){
 		task_done(t,"300|\"code\":\"300\",\"info\":\"Parametros recibidos incorrectos\"");
 		return;
         }
@@ -731,7 +728,7 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 		case T_SUSC_ADD:
 			task_susc_add(t,db,logs); break;
 		case T_SUSC_DEL:
-			task_susc_del(t,sites,db,logs); break;
+			task_susc_del(t,sites,db,config,logs); break;
 		case T_SUSC_STOP:
 			task_susc_stop(t,sites,db); break;
 		case T_SUSC_START:

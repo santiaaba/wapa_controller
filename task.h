@@ -18,6 +18,11 @@
 
 #define ERROR_FATAL		"300|\"code\":\"300\",\"info\":\"ERROR Fatal\""
 
+#define SYSTEM_DO	if(system(command) != 0){ \
+				task_done(t,"300|\"code\":\"300\",\"info\":\"ERROR FATAL\""); \
+				return 0; \
+			}
+
 typedef enum {	
 		T_TASK_SHOW,
 

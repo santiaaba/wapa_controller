@@ -149,6 +149,6 @@ int json_proxy(char **data, T_proxy *proxy, T_db *db){
 	strcat(*data,"\",");
 	strcat(*data,aux);
 	(*data)[strlen(*data)-1] = '}';
-	*data = (char *) realloc(*data, (strle(*data)+1) * sizeof(char));
+	*data = (char *) realloc(*data, (strlen(*data)+1) * sizeof(char));
 	return 1;
 }
