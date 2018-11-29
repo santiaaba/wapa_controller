@@ -811,10 +811,9 @@ int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail){
 
 int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail){
 	/* Agrega un usuario ftp. Los siguientes datos deben venir en el diccionario
- 	site_id
-	web_dir		obtenido de la configuracion
-	user_id		string que formara parte del nombre del usuario ftp. Ej: admin
-	passwd
+ 	site_id		id del sitio
+	user_id		string
+	passwd		string
 	*/
 
 	char query[200];
@@ -868,6 +867,29 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 	return 1;
 }
 
+int db_get_ftp_id(T_db *db, char *site_id, int ftp_ids[256], int *ftp_ids_len, char *error, int *db_fail ){
+	/* Retorna el listado de ids de usuarios ftp de un sitio dado */
+	char query[200];
+	MYSQL_RES *result;
+	MYSQL_ROW row;
+	int i=0;
+
+	sprintf(query,"select id from ftpuser where site_id=%s",site_id);
+	printf("QEURY : %s\n",query);
+	if(mysql_query(db->con,query)){
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
+	result = mysql_store_result(db->con);
+	while(row = mysql_fetch_row(result)){
+		ftp_ids[i] = atoi(row[0]);
+		i++;
+	}
+	*ftp_ids_len = i;
+	return 1;
+}
+
 int db_ftp_list(T_db *db, char **data, char *site_id){
 	/* Retorna en **data en formato json los usuarios ftp de un sitio dado mediante el
  	 * parametro site_id. Si existen problemas con la base de datos retorna 0. Sino 1. */
@@ -886,6 +908,7 @@ int db_ftp_list(T_db *db, char **data, char *site_id){
 
 	*data=(char *)realloc(*data,real_size * sizeof(char));
 	result = mysql_store_result(db->con);
+	strcpy(*data,"200|[");
 	while(row = mysql_fetch_row(result)){
 		exist = 1;
 		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\"},",row[0],row[1]);
@@ -906,15 +929,13 @@ int db_ftp_list(T_db *db, char **data, char *site_id){
 	return 1;
 }
 
-int db_ftp_del(T_db *db, char *ftp_id, char *error, int *db_fail){
+int db_ftp_del(T_db *db, char *ftp_id){
 	/* Elimina una cuenta ftp */
 
 	char query[200];
 	sprintf(query,"delete from ftpuser where id=%s",ftp_id);
 	printf("QEURY : %s\n",query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_ftp_del","DB_ERROR");
-		*db_fail=1;
 		return 0;
 	}
 	return 1;

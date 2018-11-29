@@ -53,9 +53,10 @@ int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail);
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name,char *error, int *db_fail);
 
 /* Para los usuarios ftp */
+int db_get_ftp_id(T_db *db, char *site_id, int ftp_ids[256], int *ftp_ids_len, char *error, int *db_fail );
 int db_ftp_list(T_db *db, char **data, char *site_id);
 int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail);
-int db_ftp_del(T_db *db, char *ftp_id, char *error, int *db_fail);
+int db_ftp_del(T_db *db, char *ftp_id);
 
 /* Para las suscripcionse */
 int db_susc_show(T_db *db,char *susc_id,char **message,int *db_fail);

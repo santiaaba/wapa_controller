@@ -15,6 +15,21 @@
 #define HEADER_SIZE	8
 #define BACKLOG 	1 /* El número de conexiones permitidas */
 
+#define CHECK_VALID_ID(X,Y)     if(!valid_id(dictionary_get(d,#X))){ \
+                                        sprintf(message,"300|\"code\":\"300\",\"info\":\"El %s id=%s es invalido\"", \
+					#Y,dictionary_get(d,#X)); \
+                                        return 0; \
+                                }
+
+#define CHECK_VALID_U_P		if(!valid_user_name(dictionary_get(d,"name"))){ \
+			                sprintf(message,"300|\"code\":\"300\",\"info\":\"Nombre usuario invalido\""); \
+					return 0; \
+				} \
+				if(!valid_passwd(dictionary_get(d,"passwd"))){ \
+					sprintf(message,"300|\"code\":\"300\",\"info\":\"passwd invalida\""); \
+					return 0; \
+				}
+
 typedef struct t_r_server {
 	T_heap_task tasks_todo;
 	T_bag_task tasks_done;

@@ -444,7 +444,7 @@ void main(){
 	/* Comenzamos el loop del controller */
 	while(1){
 		sleep(1);
-		//continue;
+		continue;
 		changed = 0;
 		server_lock(&server);
 
