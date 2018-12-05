@@ -320,7 +320,8 @@ int db_susc_add(T_db *db, T_dictionary *d, int *db_fail){
 	/* Generamos la entrada en web_suscription */
 	random_dir(hash_dir);
 	susc_id = dictionary_get(d,"susc_id");
-	sprintf(query,"insert into web_suscription values (%s,'%s')",susc_id,hash_dir);
+	sprintf(query,"insert into web_suscription values (%s,'%s',%s)",
+		susc_id,hash_dir,dictionary_get(d,"web_sites"));
 	printf("sql %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
 	if(mysql_query(db->con,query)){
@@ -330,7 +331,7 @@ int db_susc_add(T_db *db, T_dictionary *d, int *db_fail){
 	}
 
 	/* Generamos la entrada para las tablas del servicio ftp */
-	sprintf(query,"insert into ftpgroup(groupname,gid) values (g_%s,'%s')",susc_id,susc_id);
+	sprintf(query,"insert into ftpgroup(groupname,gid) values ('g_%s',%s)",susc_id,susc_id);
 	printf("sql %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
 	if(mysql_query(db->con,query)){
@@ -338,8 +339,8 @@ int db_susc_add(T_db *db, T_dictionary *d, int *db_fail){
 		*db_fail = 1;
 		return 0;
 	}
-	sprintf(query,"insert into ftpquotalimits(name,quota_type,limit_type,bytes_xfer_avail) values (g_%s,'group','hard',%s)",
-		susc_id,dictionary_get(d,"size"));
+	sprintf(query,"insert into ftpquotalimits(name,quota_type,limit_type,bytes_xfer_avail) values ('g_%s','group','hard',%s)",
+		susc_id,dictionary_get(d,"web_quota"));
 	printf("sql %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
 	if(mysql_query(db->con,query)){
@@ -347,7 +348,7 @@ int db_susc_add(T_db *db, T_dictionary *d, int *db_fail){
 		*db_fail = 1;
 		return 0;
 	}
-	sprintf(query,"insert into ftpquotatallies(name,quota_type) values (g_%s,'group')",susc_id);
+	sprintf(query,"insert into ftpquotatallies(name,quota_type) values ('g_%s','group')",susc_id);
 	printf("sql %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
 	if(mysql_query(db->con,query)){
@@ -371,7 +372,7 @@ int db_susc_del(T_db *db, char *susc_id){
 	if(mysql_query(db->con,query)){
 		return 0;
 	}
-	sprintf(query,"delete from ftpgroup where name='g_%s'",susc_id);
+	sprintf(query,"delete from ftpgroup where groupname='g_%s'",susc_id);
 	printf("query:%s\n",query);
 	if(mysql_query(db->con,query)){
 		return 0;
@@ -391,6 +392,24 @@ int db_susc_del(T_db *db, char *susc_id){
 }
 
 /****	Funciones para sitios	****/
+
+int db_limit_sites(T_db *db, char *susc_id, int *db_fail){
+	/* retorna 0 si se supera el limite de
+	 * sitios de la suscripcion o falla la base de datos*/
+	char query[300];
+	MYSQL_RES *result;
+        MYSQL_ROW row;
+
+	sprintf(query,"select (select sites_limit from web_suscription where id=%s) - (select count(id) from web_site where susc_id=%s)",susc_id,susc_id);
+	if(mysql_query(db->con,query)){
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
+	result = mysql_store_result(db->con);
+	row = mysql_fetch_row(result);
+	return atoi(row[0]);
+}
 
 int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
 		char *dir, char *error, int *db_fail){
@@ -656,7 +675,7 @@ void db_site_list(T_db *db, char **data, char *susc_id){
 		exist = 1;
 		printf("Agregando\n");
 		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",row[0],row[1],row[2]);
-		if(strlen(*data)+strlen(aux)+1 < real_size){
+		if(strlen(*data)+strlen(aux)+1 > real_size){
 			real_size =+ max_c_site;
 			*data=(char *)realloc(*data,real_size);
 		}
@@ -702,7 +721,7 @@ void db_site_show(T_db *db, char **data, char *site_id, char *susc_id){
 			while(row = mysql_fetch_row(result)){
 				sprintf(aux,"{\"id\":\"%s\",\"url\":\"%s\"),",row[0],row[1]);
 				//Si no entra en *data, reallocamos para que entre y un poco mas
-				if(strlen(*data)+strlen(aux)+1 < real_size){
+				if(strlen(*data)+strlen(aux)+1 > real_size){
 					real_size =+ 200;
 					*data=(char *)realloc(*data,real_size);
 				}
@@ -808,6 +827,23 @@ int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail){
 }
 
 /****	Funciones para ftp	****/
+int db_limit_ftp_users(T_db *db, char *site_id, int *db_fail){
+	/* retorna 0 si se supera el limite de
+	 * usuarios ftp del sitio o falla la base de datos*/
+	char query[300];
+	MYSQL_RES *result;
+        MYSQL_ROW row;
+
+	sprintf(query,"select (select s.ftp_per_site_limit from web_suscription s inner join web_site w on (s.id = w.susc_id) where w.id=%s) - (select count(id) from ftpuser where site_id=%s)",site_id,site_id);
+	if(mysql_query(db->con,query)){
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
+	result = mysql_store_result(db->con);
+	row = mysql_fetch_row(result);
+	return atoi(row[0]);
+}
 
 int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail){
 	/* Agrega un usuario ftp. Los siguientes datos deben venir en el diccionario
@@ -823,20 +859,21 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 	MYSQL_ROW row_susc;
 
 	/*Obtenemos mediante el site_id el nombre del sitio y el susc_id */
+	printf("DB_ftp_add\n");
 	*db_fail=0;
-	sprintf(query,"select name, susc_id from web_site where id=%s",
-		dictionary_get(d,"site_id"));
+	sprintf(query,"select name, susc_id from web_site where id=%s", dictionary_get(d,"site_id"));
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_ftp_add","DB_ERROR");
+		printf("DB_SITE_ADD errno: %i\n",mysql_errno(db->con));
 		*db_fail=1;
 		return 0;
 	}
-	if(result = mysql_store_result(db->con)){
-		row_site = mysql_fetch_row(result);
-	} else {
-		printf("VEREMOS que tiramos de error\n");
+	result = mysql_store_result(db->con);
+	if(mysql_num_rows(result) < 1){
+		printf("Sitio inexistente\n");
+		strcpy(error,"300|\"code\":\"301\",\"info\":\"Sitio inexistente para crear usuario ftp\"");
 		return 0;
 	}
+	row_site = mysql_fetch_row(result);
 
 	/* Obtenemos el hash_dir */
 	sprintf(query,"select hash_dir from web_suscription where id=%s",row_site[1]);
@@ -845,23 +882,29 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 		*db_fail=1;
 		return 0;
 	}
-	if(result = mysql_store_result(db->con)){
-		row_susc = mysql_fetch_row(result);
-	} else {
-		printf("VEREMOS que tiramos de error\n");
+	result = mysql_store_result(db->con);
+	if(mysql_num_rows(result) < 1){
+		strcpy(error,"300|\"code\":\"301\",\"info\":\"ERROR Fatal. Sitio uerfano\"");
 		return 0;
 	}
+	row_susc = mysql_fetch_row(result);
 	
 	/* Armamos el homedir */
 	sprintf(homedir,"%s/%s/%s",config_webdir(c),row_susc[0],row_site[0]);
+	printf("homedir armado: %s\n",homedir);
 
 	sprintf(query,"insert into ftpuser(userid,passwd,uid,gid,homedir,site_id) values('%s/%s','%s',%s,%s,'%s',%s)",
-		dictionary_get(d,"user_id"),row_site[0],dictionary_get(d,"passwd"),config_ftpuid(c),
+		dictionary_get(d,"name"),row_site[0],dictionary_get(d,"passwd"),config_ftpuid(c),
 		row_site[1],homedir,dictionary_get(d,"site_id"));
 	printf("QEURY : %s\n",query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_ftp_user_list","DB_ERROR");
-		*db_fail=1;
+		if(mysql_errno(db->con) == 1062){
+			logs_write(db->logs,L_ERROR,"db_ftp_add","DB_ERROR: Usuario ftp repetido");
+			strcpy(error,"300|\"code\":\"301\",\"info\":\"Ya existe un usuario ftp con ese nombre\"");
+		} else {
+			*db_fail=1;
+			logs_write(db->logs,L_ERROR,"db_ftp_add","DB_ERROR");
+		}
 		return 0;
 	}
 	return 1;
@@ -906,36 +949,46 @@ int db_ftp_list(T_db *db, char **data, char *site_id){
 	if(mysql_query(db->con,query))
 		return 0;
 
-	*data=(char *)realloc(*data,real_size * sizeof(char));
+	*data=(char *)realloc(*data,real_size);
 	result = mysql_store_result(db->con);
 	strcpy(*data,"200|[");
 	while(row = mysql_fetch_row(result)){
 		exist = 1;
 		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\"},",row[0],row[1]);
-		if(strlen(*data)+strlen(aux)+1 < real_size){
-			real_size =+ 100;
+		if(strlen(*data)+strlen(aux)+1 > real_size){
+			real_size += 100;
 			*data=(char *)realloc(*data,real_size);
 		}
 		strcat(*data,aux);
 	}
-	if(exist){
+
+	if(exist)
 		(*data)[strlen(*data) - 1] = ']';
-	} else {
+	else
 		strcat(*data,"]");
-	}
+
 	//Acomodamos para no desperdiciar memoria
-	*data=(char *)realloc(*data,strlen(*data)+1);
-	printf("Resultado:-%s-\n",*data);
+	real_size = 1 + strlen(*data);
+	*data=(char *)realloc(*data,real_size);
 	return 1;
 }
 
-int db_ftp_del(T_db *db, char *ftp_id){
+int db_ftp_del(T_db *db, T_dictionary *d, char *error, int *db_fail){
 	/* Elimina una cuenta ftp */
 
 	char query[200];
-	sprintf(query,"delete from ftpuser where id=%s",ftp_id);
+	/* Verificamos que el usuario ftp a eliminar corresponda al sitio indicado */
+	sprintf(query,"delete from ftpuser where id=%s and site_id=%s",
+		dictionary_get(d,"ftp_id"),
+		dictionary_get(d,"site_id"));
 	printf("QEURY : %s\n",query);
 	if(mysql_query(db->con,query)){
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail=0;
+	if(mysql_affected_rows(db->con)==0){
+		strcpy(error,"300|\"code\":\"301\",\"info\":\"Usuario ftp inexistente para el sitio\"");
 		return 0;
 	}
 	return 1;

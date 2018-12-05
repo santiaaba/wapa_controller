@@ -82,26 +82,21 @@ typedef struct {
 	T_task_type type;		//tipo de accion a realizar
 	T_task_status status;		//estado del task
 	T_dictionary *data;		//datos necesarios para realizar la accion
+	time_t time;			//Instante de tiempo en que la tarea ingresa o finaliza
 	char *result;			//resultado a retornar
 } T_task;
 
 T_task_type task_c_to_type(char c);
-
+int valid_task_id(char *s);
 void task_init(T_task *t, T_task_type type, T_dictionary *data);
-
+time_t task_get_time(T_task *t);
 void task_destroy(T_task **t);
-
 void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 	      T_list_proxy *proxys,T_db *db, T_config *config, T_logs *logs);
-
 void task_done(T_task *t, char *message);
-
 char *task_get_token(T_task *t);
-
 char *task_get_id(T_task *t);
-
 char *task_get_result(T_task *t);
-
 void task_show(T_task *t);
 
 /*****************************
@@ -145,6 +140,7 @@ void bag_task_init(T_bag_task *b);
 void bag_task_add(T_bag_task *b, T_task *t);
 T_task *bag_task_pop(T_bag_task *b, T_taskid *id);
 unsigned int bag_task_size(T_bag_task *b);
+void bag_task_timedout(T_bag_task *b, int d);
 void bag_task_print(T_bag_task *b);
 
 #define JOB_H

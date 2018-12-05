@@ -28,20 +28,45 @@ void server_add_task(T_server *s, T_task *t, char **message){
 	pthread_mutex_unlock(&(s->mutex_heap_task));
 }
 
+uint32_t server_num_tasks(T_server *s){
+        printf("cantidad tareas: %u,%u\n",heap_task_size(&(s->tasks_todo)), bag_task_size(&(s->tasks_done)));
+        return (heap_task_size(&(s->tasks_todo)) + bag_task_size(&(s->tasks_done)));
+}
+
+void *server_purge_done(void *param){
+	/* Se encarga de purgar cada 10 segundos la estructura
+	   de tareas finalizadas */
+
+	T_server *s= (T_server *)param;
+	while(1){
+		sleep(10);
+		pthread_mutex_lock(&(s->mutex_bag_task));
+			bag_task_timedout(&(s->tasks_done),
+			config_task_done_time(s->config));
+		pthread_mutex_unlock(&(s->mutex_bag_task));
+	}
+}
+
 void *server_do_task(void *param){
 	T_task *task;
 	T_server *s= (T_server *)param;
 
 	while(1){
-		//sleep(5);
+		sleep(5);
 		//printf("Corremos el task\n");
 		pthread_mutex_lock(&(s->mutex_heap_task));
 			task = heap_task_pop(&(s->tasks_todo));
 		pthread_mutex_unlock(&(s->mutex_heap_task));
 		if(task != NULL){
-			pthread_mutex_lock(&(s->mutex_lists));
-				task_run(task,s->sites,s->workers,s->proxys,s->db,s->config,s->logs);
-			pthread_mutex_unlock(&(s->mutex_lists));
+			/* Si la tarea hace mas de un minuto que esta en cola
+			   vence por timeout */
+			if(60 < difftime(time(NULL),task_get_time(task)))
+				task_done(task,"300|\"code\":\"300\",\"info\":\"Task time Out\"}");
+			else {
+				pthread_mutex_lock(&(s->mutex_lists));
+					task_run(task,s->sites,s->workers,s->proxys,s->db,s->config,s->logs);
+				pthread_mutex_unlock(&(s->mutex_lists));
+			}
 			pthread_mutex_lock(&(s->mutex_bag_task));
 				bag_task_add(&(s->tasks_done),task);
 				bag_task_print(&(s->tasks_done));
@@ -105,7 +130,15 @@ int verify_susc_show(T_dictionary *d, char *message){
 }
 
 int verify_susc_add(T_dictionary *d, char *message){
-	/* IMPLEMENTAR */
+	CHECK_VALID_ID(susc_id,subscripsion)
+	if(!valid_size(dictionary_get(d,"web_quota"))){
+		sprintf(message,"300|\"code\":\"300\",\"info\":\"tamano en bytes invalido\"");
+		return 0;
+	}
+	if(!valid_size(dictionary_get(d,"web_sites"))){
+		sprintf(message,"300|\"code\":\"300\",\"info\":\"cantidad sitios invalido\"");
+		return 0;
+	}
 	return 1;
 }
 
@@ -167,7 +200,7 @@ int verify_ftp_list(T_dictionary *d, char *message){
 	return 1;
 }
 int verify_ftp_del(T_dictionary *d, char *message){
-	CHECK_VALID_ID(susc_id,subscripcion)
+	CHECK_VALID_ID(site_id,sitio)
 	CHECK_VALID_ID(ftp_id,ftp)
 	return 1;
 }
@@ -286,7 +319,6 @@ int send_all_message(T_server *s, char *send_message){
 
 	/* Los 4 primeros bytes del header es el tamano total del mensaje */
         int_to_4bytes(&send_message_size,buffer);
-
 	while(c < send_message_size){
 		if(send_message_size - c + HEADER_SIZE < BUFFER_SIZE){
 			/* Entra en un solo buffer */
@@ -352,16 +384,32 @@ void *server_listen(void *param){
 				pos=1;
 				parce_data(recv_message,'|',&pos,taskid);
 				printf("Recuperamos TASKID -%s- del mensaje -%s-\n",taskid,recv_message);
-				server_get_task(s,(T_taskid *)taskid,&send_message);
+				if(valid_task_id(taskid))
+					server_get_task(s,(T_taskid *)taskid,&send_message);
+				else {
+					printf("Task id invalido: -%s-\n",taskid);
+					send_message=(char *)malloc(49);
+					sprintf(send_message,"300|\"code\":\"300\",\"info\":\"El task_id es invalido\"");
+				}
 			} else if(recv_message[0] == 'c'){
 				/* nos solicitan un chequeo */
 				server_check(s,&send_message);
 			} else {
 				/* Creamos el task si los datos son correctos */
-				if (create_task(&task,recv_message,&send_message)){
-					server_add_task(s,task,&send_message);
+				if(server_num_tasks(s) < 200 ){
+					if (create_task(&task,recv_message,&send_message)){
+						sprintf(send_message,"Agregamos tarea nueva\n");
+						server_add_task(s,task,&send_message);
+					} else {
+						send_message=(char *)malloc(49);
+						sprintf(send_message,"300|\"code\":\"300\",\"info\":\"parametros incorrectos\"");
+					}
+				} else {
+					send_message=(char *)malloc(52);
+					sprintf(send_message,"300|\"code\":\"300\",\"info\":\"limite Task en Controller\"");
 				}
 			}
+			printf("Enviamos al CORE-%s-\n",send_message);
 			send_all_message(s,send_message);
 		}
 		close(s->fd_client);
@@ -381,6 +429,10 @@ void server_init(T_server *s, T_list_site *sites, T_list_worker *workers,
 	bag_task_init(&(s->tasks_done));
 	if(0 != pthread_create(&(s->thread), NULL, &server_listen, s)){
 		printf ("Imposible levantar el servidor\n");
+		exit(2);
+	}
+	if(0 != pthread_create(&(s->purge_done), NULL, &server_purge_done, s)){
+		printf ("Imposible levantar el hilo purge_done\n");
 		exit(2);
 	}
 	if(0 != pthread_create(&(s->do_task), NULL, &server_do_task, s)){

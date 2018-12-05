@@ -35,6 +35,7 @@ typedef struct t_r_server {
 	T_bag_task tasks_done;
 	pthread_t thread;
 	pthread_t do_task;
+	pthread_t purge_done;
 	pthread_mutex_t mutex_heap_task;
 	pthread_mutex_t mutex_bag_task;
 	pthread_mutex_t mutex_lists;

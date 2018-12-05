@@ -64,6 +64,9 @@ CREATE TABLE `plan` (
   `name` varchar(50) DEFAULT NULL,
   `status` int(11) NOT NULL DEFAULT '1',
   `max` int(11) NOT NULL DEFAULT '1',
+  `web_sites` int(10) unsigned NOT NULL DEFAULT '1',
+  `web_quota` int(10) unsigned NOT NULL DEFAULT '1048576',
+  `limit_ftp_per_site` int(10) unsigned NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -74,7 +77,7 @@ CREATE TABLE `plan` (
 
 LOCK TABLES `plan` WRITE;
 /*!40000 ALTER TABLE `plan` DISABLE KEYS */;
-INSERT INTO `plan` VALUES (1,'dorado',1,1);
+INSERT INTO `plan` VALUES (1,'dorado',1,1,1,1048576,1);
 /*!40000 ALTER TABLE `plan` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -117,7 +120,7 @@ CREATE TABLE `suscription` (
   `plan_id` int(11) DEFAULT NULL,
   `last_action` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -126,7 +129,7 @@ CREATE TABLE `suscription` (
 
 LOCK TABLES `suscription` WRITE;
 /*!40000 ALTER TABLE `suscription` DISABLE KEYS */;
-INSERT INTO `suscription` VALUES (30,29,'dorado',1,1,1);
+INSERT INTO `suscription` VALUES (33,29,'dorado',3,1,1),(34,29,'dorado',2,1,1);
 /*!40000 ALTER TABLE `suscription` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -209,7 +212,7 @@ CREATE TABLE `ftpgroup` (
 
 LOCK TABLES `ftpgroup` WRITE;
 /*!40000 ALTER TABLE `ftpgroup` DISABLE KEYS */;
-INSERT INTO `ftpgroup` VALUES ('grupo_30',30,'');
+INSERT INTO `ftpgroup` VALUES ('g_33',33,'');
 /*!40000 ALTER TABLE `ftpgroup` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -240,7 +243,6 @@ CREATE TABLE `ftpquotalimits` (
 
 LOCK TABLES `ftpquotalimits` WRITE;
 /*!40000 ALTER TABLE `ftpquotalimits` DISABLE KEYS */;
-INSERT INTO `ftpquotalimits` VALUES ('grupo_30','group','false','hard',0,0,1048576,0,0,0);
 /*!40000 ALTER TABLE `ftpquotalimits` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -269,7 +271,6 @@ CREATE TABLE `ftpquotatallies` (
 
 LOCK TABLES `ftpquotatallies` WRITE;
 /*!40000 ALTER TABLE `ftpquotatallies` DISABLE KEYS */;
-INSERT INTO `ftpquotatallies` VALUES ('grupo_30','group',0,0,859790,0,0,0);
 /*!40000 ALTER TABLE `ftpquotatallies` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -295,7 +296,7 @@ CREATE TABLE `ftpuser` (
   `admin` enum('false','true') NOT NULL DEFAULT 'false',
   PRIMARY KEY (`id`),
   UNIQUE KEY `userid` (`userid`)
-) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=latin1 COMMENT='ProFTP user table';
+) ENGINE=MyISAM AUTO_INCREMENT=9 DEFAULT CHARSET=latin1 COMMENT='ProFTP user table';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -304,7 +305,6 @@ CREATE TABLE `ftpuser` (
 
 LOCK TABLES `ftpuser` WRITE;
 /*!40000 ALTER TABLE `ftpuser` DISABLE KEYS */;
-INSERT INTO `ftpuser` VALUES (1,'sdiaz/sitio3','sAn474226',2001,30,'/websites/92/49/sitio3','/sbin/nologin',63,'2018-11-27 10:04:02','2018-11-27 09:42:32',31,'false'),(2,'rocio/sitio3','sAn474226',2001,30,'/websites/92/49/sitio3','/sbin/nologin',2,'2018-11-27 09:16:50','2018-11-27 09:16:59',31,'false');
 /*!40000 ALTER TABLE `ftpuser` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -367,7 +367,7 @@ CREATE TABLE `web_indexes` (
   `name` varchar(50) DEFAULT NULL,
   `prioridad` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -376,7 +376,6 @@ CREATE TABLE `web_indexes` (
 
 LOCK TABLES `web_indexes` WRITE;
 /*!40000 ALTER TABLE `web_indexes` DISABLE KEYS */;
-INSERT INTO `web_indexes` VALUES (19,31,'default.html',0),(20,31,'index.htm',1),(21,31,'index.html',2),(22,31,'index.asp',3),(23,31,'index.aspx',4),(24,31,'index.php',5);
 /*!40000 ALTER TABLE `web_indexes` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -424,7 +423,7 @@ CREATE TABLE `web_site` (
   `status` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -433,7 +432,6 @@ CREATE TABLE `web_site` (
 
 LOCK TABLES `web_site` WRITE;
 /*!40000 ALTER TABLE `web_site` DISABLE KEYS */;
-INSERT INTO `web_site` VALUES (31,1,'sitio3',1,30,0);
 /*!40000 ALTER TABLE `web_site` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -447,8 +445,10 @@ DROP TABLE IF EXISTS `web_suscription`;
 CREATE TABLE `web_suscription` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `hash_dir` varchar(5) NOT NULL,
+  `sites_limit` int(10) unsigned NOT NULL DEFAULT '1',
+  `ftp_per_site_limit` int(10) unsigned NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -457,7 +457,7 @@ CREATE TABLE `web_suscription` (
 
 LOCK TABLES `web_suscription` WRITE;
 /*!40000 ALTER TABLE `web_suscription` DISABLE KEYS */;
-INSERT INTO `web_suscription` VALUES (30,'92/49');
+INSERT INTO `web_suscription` VALUES (33,'15/03',1,1);
 /*!40000 ALTER TABLE `web_suscription` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -493,4 +493,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2018-11-28 11:48:21
+-- Dump completed on 2018-12-05 15:22:59

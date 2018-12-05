@@ -25,7 +25,29 @@ void random_token(T_tasktoken value){
 	value[TOKEN_SIZE] = '\0';
 }
 
+int valid_task_id(char *s){
+	int ok=1;
+	int size;
+	int i=0;
+
+	if(s == NULL)
+		return 0;
+	if(strlen(s) != TASKID_SIZE)
+		return 0;
+	while(ok && i<TASKID_SIZE){
+		ok = ((47 < (int)s[i] && (int)s[i] < 58) ||     //numeros
+		     (64 < (int)s[i] && (int)s[i] < 91) ||      //letras mayusculas
+		     (96 < (int)s[i] && (int)s[i] < 123));       //letras minusculas
+		i++;
+	}
+	return ok;
+}
+
 T_task_type task_c_to_type(char c){
+	/* Hay dos restricciones.
+ 	 * 't': Es utilizado cuando el core solicita el estado de un task
+ 	 * 'c': Es utilizado cuando el core solicita un chequeo al controller
+ 	 */
 	switch(c){
 		case '0': return T_SUSC_ADD;
 		case '1': return T_SUSC_DEL;
@@ -42,7 +64,7 @@ T_task_type task_c_to_type(char c){
 		case 'e': return T_SITE_START;
 
 		case 'b': return T_FTP_LIST;
-		case 'c': return T_FTP_ADD;
+		case 'h': return T_FTP_ADD;
 		case 'f': return T_FTP_DEL;
 		case 'g': return T_FTP_MOD;
 
@@ -72,6 +94,7 @@ T_task_type task_c_to_type(char c){
 void task_init(T_task *t, T_task_type type, T_dictionary *data){
 	random_task_id(t->id);
 	//random_token(t->token);
+	t->time = time(NULL);
 	t->type = type;
 	t->data = data;
 	t->result = NULL;
@@ -83,6 +106,10 @@ void task_destroy(T_task **t){
 	}
 	free((*t)->result);
 	free(*t);
+}
+
+time_t task_get_time(T_task *t){
+	return t->time;
 }
 
 char *task_get_token(T_task *t){
@@ -99,9 +126,8 @@ char *task_get_id(T_task *t){
 
 void task_done(T_task *t, char *message){
 	t->status = T_DONE;
-	printf("Allocamos espacio\n");
+	t->time = time(NULL);
 	t->result=(char *)realloc(t->result,strlen(message) + 1);
-	printf("Copiamos mensaje -%s-\n",message);
 	strcpy(t->result,message);
 }
 
@@ -142,6 +168,16 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	name = dictionary_get(t->data,"name");
 	susc_id = dictionary_get(t->data,"susc_id");
 
+	/* Verificamos que no se supere el limite de sitios establecidos
+	   para la suscripcion */
+	if(0 == db_limit_sites(db, susc_id, &db_fail)){
+		if(db_fail)
+			task_done(t,ERROR_FATAL);
+		else
+			task_done(t,"300|\"code\":\"300\",\"info\":\"Se supera el limite de sitios\"");
+		return 0;
+	}
+	
 	// Alta en la base de datos del sitio
 	if(!db_site_add(db,&newsite,name,atoi(susc_id),hash_dir,error,&db_fail)){
 		if(db_fail){
@@ -161,13 +197,13 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	sprintf(command,"mkdir -p /%s/%s/%s/logs",hash_dir,name,config_webdir(config));
 	SYSTEM_DO
 
-	sprintf(command,"chown -R ftpuser:root -p /%s/%s/%s",hash_dir,name,config_webdir(config));
+	sprintf(command,"chown -R ftpuser:root /%s/%s/%s",hash_dir,name,config_webdir(config));
 	SYSTEM_DO
 
-	sprintf(command,"chmod -R 755 -p /%s/%s/%s",hash_dir,name,config_webdir(config));
+	sprintf(command,"chmod -R 755 /%s/%s/%s",hash_dir,name,config_webdir(config));
 	SYSTEM_DO
 
-	sprintf(command,"chmod -R 555 -p /%s/%s/%s/logs",hash_dir,name,config_webdir(config));
+	sprintf(command,"chmod -R 555 /%s/%s/%s/logs",hash_dir,name,config_webdir(config));
 	SYSTEM_DO
 
 	sprintf(command,"cp -pr %s/* /%s/%s/%s/wwwroot/",config_default(config),
@@ -216,6 +252,7 @@ int task_site_del(T_task *t, T_list_site *l, T_db *db, T_config *c, T_logs *logs
 			task_done(t,error);
 	} else {
 		ok = 1;
+		dictionary_add(task_aux->data,"site_id",site_id);
 		while((ftp_ids_len > 0) && ok){
 			sprintf(ftp_id,"%i",ftp_ids[ftp_ids_len - 1 ]);
 			dictionary_add(task_aux->data,"ftp_id",ftp_id);
@@ -512,7 +549,10 @@ void task_site_mod(T_task *t, T_list_site *l, T_db *db, T_logs *logs){
 
 void task_ftp_list(T_task *t, T_db *db){
 
-	db_ftp_list(db,&(t->result),dictionary_get(t->data,"site_id"));
+	if(!db_ftp_list(db,&(t->result),dictionary_get(t->data,"site_id"))){
+		task_done(t,ERROR_FATAL);
+	}
+	printf("Termino ftp\n");
 }
 
 void task_ftp_add(T_task *t, T_db *db, T_config *config){
@@ -520,22 +560,41 @@ void task_ftp_add(T_task *t, T_db *db, T_config *config){
 	char error[200];
 	int db_fail;
 
-	if(!db_ftp_add(db,t->data,config,error,&db_fail)){
-		if(db_fail){
-			task_done(t,ERROR_FATAL);
-		} else {
-			task_done(t,error);
-		}
+	/* Verificamos que no se supere el limite de usuarios
+	   ftp por sitio */
+        if(0 == db_limit_ftp_users(db, dictionary_get(t->data,"site_id"), &db_fail)){
+                if(db_fail)
+                        task_done(t,ERROR_FATAL);
+                else
+                        task_done(t,"300|\"code\":\"300\",\"info\":\"Se supera el limite de usuarios ftp por sitio\"");
+        } else {
+		if(!db_ftp_add(db,t->data,config,error,&db_fail)){
+			if(db_fail){
+				task_done(t,ERROR_FATAL);
+			} else {
+				task_done(t,error);
+			}
+		} else
+			task_done(t,"200|\"code\":\"231\",\"info\":\"Usuario ftp agregado\"");
 	}
-	task_done(t,"200|\"code\":\"203\",\"info\":\"Usuario ftp agregado\"");
 }
 
 int task_ftp_del(T_task *t, T_db *db){
-	/* Elimina usuario secundario de un sitio */
-	if(!db_ftp_del(db,dictionary_get(t->data,"ftp_id")))
-		task_done(t,ERROR_FATAL);
-	else
-		task_done(t,"200");
+	/* Elimina usuario ftp del sitio. Si no pudo retorna 0.
+ 	   Si pudo retorna 1. */
+	char error[200];
+	int db_fail;
+
+	if(!db_ftp_del(db,t->data,error,&db_fail)){
+		if(db_fail)
+			task_done(t,ERROR_FATAL);
+		else
+			 task_done(t,error);
+		return 0;
+	} else {
+		task_done(t,"200|\"code\":\"232\",\"info\":\"Usuario ftp eliminado\"");
+		return 1;
+	}
 }
 
 void task_ftp_mod(T_task *t, T_db *db){
@@ -840,6 +899,26 @@ T_task *bag_task_pop(T_bag_task *b, T_taskid *id){
 
 unsigned int bag_task_size(T_bag_task *b){
 	return b->size;
+}
+
+void bag_task_timedout(T_bag_task *b, int d){
+	/* Elimina de la estructura todas las
+	   tareas cuya diferencia de tiempo entre
+	   finalizado y la hora actual sea lo que
+	   se indica en el parametro d */
+
+	T_task *taux = NULL;
+	time_t now = time(NULL);
+
+	printf("bag_task_timedout\n");
+	b->actual = b->first;
+	while((b->actual != NULL)){
+		if(d < difftime(now,task_get_time(b->actual->data))){
+			taux = bag_site_remove(b);
+			free(taux);
+		} else
+			b->actual = b->actual->next;
+	}
 }
 
 void bag_task_print(T_bag_task *b){
