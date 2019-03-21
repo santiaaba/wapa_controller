@@ -32,6 +32,7 @@
 
 typedef struct t_r_server {
 	T_heap_task tasks_todo;
+	T_task *runningTask;
 	T_bag_task tasks_done;
 	pthread_t thread;
 	pthread_t do_task;

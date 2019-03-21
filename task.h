@@ -34,6 +34,7 @@ typedef enum {
 		T_SUSC_START,
 
 		T_SITE_LIST,
+		T_SITE_LIST_ALL,
 		T_SITE_SHOW,
 		T_SITE_ADD,
 		T_SITE_MOD,

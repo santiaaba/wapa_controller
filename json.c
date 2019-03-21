@@ -10,7 +10,7 @@ void json_servers(char **data, T_list_worker *workers, T_list_proxy *proxys, T_d
 	int real_size = 100;
 
 	*data = (char *) realloc(*data,real_size * sizeof(char));
-	strcpy(*data,"300|[");
+	strcpy(*data,"200|[");
 	list_worker_first(workers);
 	while(!list_worker_eol(workers)){
 		worker = list_worker_get(workers);

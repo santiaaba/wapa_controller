@@ -22,6 +22,7 @@ typedef struct config{
 	char webdir[100];		/* Directorio absoluto a partir del
 					   cual se generan los hash de los sitios */
 	int load_average;
+	int task_timeout;			/* Tiempo en que se elimina una tarea en el bag si no fue consultada */
 	int sites_average;
 } T_config;
 
@@ -38,5 +39,6 @@ char *config_webdir(T_config *conf);
 T_logs_level config_logs_level(T_config *conf);
 int config_load_average(T_config *conf);
 int config_sites_average(T_config *conf);
+int config_task_timeout(T_config *conf);
 
 #endif

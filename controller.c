@@ -443,25 +443,24 @@ void main(){
 
 	/* Comenzamos el loop del controller */
 	while(1){
-		sleep(1);
-		continue;
+		sleep(10);
+		//continue;
 		changed = 0;
 		server_lock(&server);
-
-		/* Chequeo de workers */
-		check_workers(&workers,&proxys,&config);
-		if(changed){ printf("@@@@@@@ check_workers CAMBIO\n"); }
-		/* Chequeo de proxys */
-		check_proxys(&proxys,&sites);	//No tiene sentido reiniciar todo
-		//if(changed){ printf("@@@@@@@ check_proxys CAMBIO\n"); }
-		
-		/* Asignacion sitios a worker */
-		changed |= normalice_sites(&sites, &workers, &proxys, &config);
-		if(changed){ printf("@@@@@@@ normalice_sites CAMBIO\n"); }
-
-		/* Balanceamos workers */
-		changed |= balance_workers(&workers,&proxys,&config);
-		if(changed){ printf("@@@@@@@ balance_workers CAMBIO\n"); }
+			/* Chequeo de workers */
+			check_workers(&workers,&proxys,&config);
+			if(changed){ printf("@@@@@@@ check_workers CAMBIO\n"); }
+			/* Chequeo de proxys */
+			check_proxys(&proxys,&sites);	//No tiene sentido reiniciar todo
+			//if(changed){ printf("@@@@@@@ check_proxys CAMBIO\n"); }
+			
+			/* Asignacion sitios a worker */
+			changed |= normalice_sites(&sites, &workers, &proxys, &config);
+			if(changed){ printf("@@@@@@@ normalice_sites CAMBIO\n"); }
+	
+			/* Balanceamos workers */
+			changed |= balance_workers(&workers,&proxys,&config);
+			if(changed){ printf("@@@@@@@ balance_workers CAMBIO\n"); }
 		server_unlock(&server);
 
 		if(changed)
@@ -471,7 +470,6 @@ void main(){
 		check_db(&db);
 
 		printf("Fin del bucle");
-		sleep(5);
 	}
 
 	/* Finalizamos el hilo del rest_server */

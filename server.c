@@ -39,36 +39,36 @@ void *server_purge_done(void *param){
 
 	T_server *s= (T_server *)param;
 	while(1){
-		sleep(10);
+		sleep(1);
 		pthread_mutex_lock(&(s->mutex_bag_task));
 			bag_task_timedout(&(s->tasks_done),
-			config_task_done_time(s->config));
+			config_task_timeout(s->config));
 		pthread_mutex_unlock(&(s->mutex_bag_task));
 	}
 }
 
 void *server_do_task(void *param){
-	T_task *task;
 	T_server *s= (T_server *)param;
 
 	while(1){
-		sleep(5);
+		//sleep(5);
 		//printf("Corremos el task\n");
 		pthread_mutex_lock(&(s->mutex_heap_task));
-			task = heap_task_pop(&(s->tasks_todo));
+			s->runningTask = heap_task_pop(&(s->tasks_todo));
 		pthread_mutex_unlock(&(s->mutex_heap_task));
-		if(task != NULL){
+		if(s->runningTask != NULL){
 			/* Si la tarea hace mas de un minuto que esta en cola
 			   vence por timeout */
-			if(60 < difftime(time(NULL),task_get_time(task)))
-				task_done(task,"300|\"code\":\"300\",\"info\":\"Task time Out\"}");
+			if(60 < difftime(time(NULL),task_get_time(s->runningTask)))
+				task_done(s->runningTask,"300|\"code\":\"300\",\"info\":\"Task time Out\"}");
 			else {
 				pthread_mutex_lock(&(s->mutex_lists));
-					task_run(task,s->sites,s->workers,s->proxys,s->db,s->config,s->logs);
+					task_run(s->runningTask,s->sites,s->workers,s->proxys,s->db,s->config,s->logs);
 				pthread_mutex_unlock(&(s->mutex_lists));
 			}
 			pthread_mutex_lock(&(s->mutex_bag_task));
-				bag_task_add(&(s->tasks_done),task);
+				bag_task_add(&(s->tasks_done),s->runningTask);
+				s->runningTask = NULL;
 				bag_task_print(&(s->tasks_done));
 			pthread_mutex_unlock(&(s->mutex_bag_task));
 		}
@@ -83,20 +83,34 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result_message){
 
 	pthread_mutex_lock(&(s->mutex_bag_task));
 	pthread_mutex_lock(&(s->mutex_heap_task));
+	pthread_mutex_lock(&(s->mutex_lists));
 		printf("Buscadno TASK ID: %s\n",taskid);
 		/* Buscamos en la bolsa de tareas finalizadas */
 		bag_task_print(&(s->tasks_done));
 		task = bag_task_pop(&(s->tasks_done),taskid);
 		if(NULL == task){
+			printf("No esta en la bolsa de terminados\n");
 			/* No ha finalizado o no existe */
 			*result_message=(char *)realloc(*result_message,2);
 			/* Verificamos si esta en la cola de tareas pendientes */
+			printf("Buscamos en cola de pendientes\n");
 			if(heap_task_exist(&(s->tasks_todo),(char *)taskid)){
 				/* Tarea existe y esta en espera */
-				strcpy(*result_message,"2");
-			} else {
-				/* Tarea no existe */
+				printf("Esta pendiente!!!!!\n");
 				strcpy(*result_message,"0");
+			} else {
+				printf("No esta en cola de pendientes\n");
+				printf("Verificamos si esta corriendo\n");
+				/* Verificamos si esta corriendo */
+				printf("Comparamos %s = %s\n",task_get_id(s->runningTask),(char *)taskid);
+				if((s->runningTask != NULL) && (strcmp(task_get_id(s->runningTask),(char *)taskid) == 0)){
+					printf("CORRIENDOOOOO %s\n", (char *)taskid);
+					strcpy(*result_message,"0");
+				} else {
+					printf("No esta corriendo\n");
+					/* Tarea no existe */
+					strcpy(*result_message,"2");
+				}
 			}
 		} else {
 			printf("TASK finalizado. Informamos\n");
@@ -110,6 +124,7 @@ void server_get_task(T_server *s, T_taskid *taskid, char **result_message){
 		}
 	pthread_mutex_unlock(&(s->mutex_heap_task));
 	pthread_mutex_unlock(&(s->mutex_bag_task));
+	pthread_mutex_unlock(&(s->mutex_lists));
 }
 
 void buffer_to_dictionary(char *message, T_dictionary *data, int *pos){
@@ -224,6 +239,7 @@ int verify_command(char command, T_dictionary *d, char *message){
 		case T_SUSC_START: return verify_susc_id(d,message);
 
 		case T_SITE_LIST: return verify_site_list(d,message);
+		case T_SITE_LIST_ALL: return 1;
 		case T_SITE_SHOW: return verify_site_id(d,message);
 		case T_SITE_ADD: return verify_site_add(d,message);
 		case T_SITE_MOD: return verify_site_mod(d,message);
@@ -365,9 +381,7 @@ void *server_listen(void *param){
 	}
 	s->sin_size=sizeof(struct sockaddr_in);
 
-	printf("server_listen\n");
 	recv_message = (char *)malloc(10);
-	printf("server_listen\n");
 	send_message = (char *)malloc(10);
 	while(1){
 		printf("Esperando conneccion desde el cliente()\n"); //Debemos mantener viva la conexion
@@ -422,6 +436,7 @@ void server_init(T_server *s, T_list_site *sites, T_list_worker *workers,
 	s->sites = sites;
 	s->proxys = proxys;
 	s->workers = workers;
+	s->runningTask = NULL;
 	s->db = db;
 	s->config = config;
 	s->logs = logs;

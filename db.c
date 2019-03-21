@@ -653,33 +653,33 @@ int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_le
 
 void db_site_list(T_db *db, char **data, char *susc_id){
 	/* Retorna en formato json la lista de sitios dado el id de
- 	 * una suscripcion pasado por parametro */
+ 	 * una suscripcion pasado por parametro. Si susc_id="A" entonces lista todo */
 
-	const int max_c_site=300; //Los datos de un solo sitio no deben superar este valor
+	int size=300; //Los datos de un solo sitio no deben superar este valor
 	char query[200];
-	char aux[max_c_site];
 	int real_size;
 	int exist=0;
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
-	sprintf(query,"select id,name,status from web_site where susc_id =%s",susc_id);
+	if(susc_id[0] == 'A')
+		sprintf(query,"select id,name,status from web_site");
+	else
+		sprintf(query,"select id,name,status from web_site where susc_id =%s",susc_id);
 	printf("DB_SITE_LIST: %s\n",query);
 	mysql_query(db->con,query);
 	result = mysql_store_result(db->con);
 
-	*data=(char *)realloc(*data,max_c_site);
-	real_size = max_c_site;
+	*data=(char *)realloc(*data,size);
 	strcpy(*data,"200|[");
 	while(row = mysql_fetch_row(result)){
 		exist = 1;
 		printf("Agregando\n");
-		sprintf(aux,"{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",row[0],row[1],row[2]);
-		if(strlen(*data)+strlen(aux)+1 > real_size){
-			real_size =+ max_c_site;
-			*data=(char *)realloc(*data,real_size);
+		if(strlen(*data) + strlen(row[0]) + strlen(row[1]) + strlen(row[2]) + 31 > size){
+			size =+ 300;
+			*data=(char *)realloc(*data,size);
 		}
-		strcat(*data,aux);
+		sprintf(*data,"%s{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",*data,row[0],row[1],row[2]);
 	}
 	if(exist){
 		(*data)[strlen(*data) - 1] = ']';
@@ -687,7 +687,7 @@ void db_site_list(T_db *db, char **data, char *susc_id){
 		strcat(*data,"]");
 	}
 	// Redimencionamos para no desperdiciar memoria
-	*data=(char *)realloc(*data,strlen(*data)+1);
+	//*data=(char *)realloc(*data,strlen(*data)+1);
 	printf("Resultado:-%s-\n",*data);
 }
 

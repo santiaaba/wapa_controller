@@ -45,6 +45,7 @@ int config_load(const char *filename, T_config *conf){
 			if(0 == strcmp(&atr[0],"db_pass")){strcpy(conf->db_pass,&val[0]);}
 			if(0 == strcmp(&atr[0],"default_domain")){strcpy(conf->default_domain,&val[0]);}
 			if(0 == strcmp(&atr[0],"load_average")){conf->load_average = atoi(&val[0]);}
+			if(0 == strcmp(&atr[0],"task_timeout")){conf->task_timeout = atoi(&val[0]);}
 			if(0 == strcmp(&atr[0],"sites_average")){conf->sites_average = atoi(&val[0]);}
 			if(0 == strcmp(&atr[0],"log_file")){strcpy(conf->logs_file,&val[0]);}
 			if(0 == strcmp(&atr[0],"default")){strcpy(conf->_default,&val[0]);}
@@ -76,6 +77,9 @@ char *config_default_domain(T_config *conf){
 }
 int config_load_average(T_config *conf){
 	return conf->load_average;
+}
+int config_task_timeout(T_config *conf){
+	return conf->task_timeout;
 }
 int config_sites_average(T_config *conf){
 	return conf->sites_average;

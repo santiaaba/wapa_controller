@@ -56,6 +56,7 @@ T_task_type task_c_to_type(char c){
 		case '4': return T_SUSC_SHOW;
 
 		case 'l': return T_SITE_LIST;
+		case 'q': return T_SITE_LIST_ALL;
 		case 's': return T_SITE_SHOW;
 		case 'a': return T_SITE_ADD;
 		case 'm': return T_SITE_MOD;
@@ -139,6 +140,13 @@ void task_site_list(T_task *t, T_db *db, T_logs *logs){
 	db_site_list(db,&(t->result),susc_id);
 	/* Falta agregar una lista de los workers donde esta
  	   cada site */
+}
+
+void task_site_list_all(T_task *t, T_db *db, T_logs *logs){
+	/* Lista todos los sitios de la nube */
+
+	db_site_list(db,&(t->result),"A");
+	
 }
 
 void task_site_show(T_task *t, T_db *db, T_logs *logs){
@@ -706,6 +714,8 @@ void task_run(T_task *t, T_list_site *sites, T_list_worker *workers,
 
 		case T_SITE_LIST:
 			task_site_list(t,db,logs); break;
+		case T_SITE_LIST_ALL:
+			task_site_list_all(t,db,logs); break;
 		case T_SITE_SHOW:
 			task_site_show(t,db,logs); break;
 		case T_SITE_ADD:
