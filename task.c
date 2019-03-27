@@ -178,6 +178,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 
 	/* Verificamos que no se supere el limite de sitios establecidos
 	   para la suscripcion */
+	printf("Verificamos limite sitios\n");
 	if(0 == db_limit_sites(db, susc_id, &db_fail)){
 		if(db_fail)
 			task_done(t,ERROR_FATAL);
@@ -187,6 +188,7 @@ int task_site_add(T_task *t, T_list_site *l, T_db *db, T_config *config, T_logs 
 	}
 	
 	// Alta en la base de datos del sitio
+	printf("Alta en base de datos\n");
 	if(!db_site_add(db,&newsite,name,atoi(susc_id),hash_dir,error,&db_fail)){
 		if(db_fail){
 			task_done(t,ERROR_FATAL);

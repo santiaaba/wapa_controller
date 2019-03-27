@@ -400,14 +400,26 @@ int db_limit_sites(T_db *db, char *susc_id, int *db_fail){
 	MYSQL_RES *result;
         MYSQL_ROW row;
 
+	printf("Entro\n");
 	sprintf(query,"select (select sites_limit from web_suscription where id=%s) - (select count(id) from web_site where susc_id=%s)",susc_id,susc_id);
+	printf(query);
+	printf("PASO\n");
 	if(mysql_query(db->con,query)){
 		*db_fail = 1;
+		printf("NO ALCANZO\n");
 		return 0;
 	}
-	*db_fail = 0;
 	result = mysql_store_result(db->con);
+	printf("NUMERO = %i\n",mysql_num_rows(result));
 	row = mysql_fetch_row(result);
+	/* Si el resultado esl NULL es porque hay una inconsistencia en la base de datos */
+	if(!row[0]){
+		*db_fail = 1;
+		printf("NULL VALOR\n");
+		return 0;
+	}
+	printf("ALCANZO\n");
+	*db_fail = 0;
 	return atoi(row[0]);
 }
 
@@ -669,9 +681,10 @@ void db_site_list(T_db *db, char **data, char *susc_id){
 	printf("DB_SITE_LIST: %s\n",query);
 	mysql_query(db->con,query);
 	result = mysql_store_result(db->con);
-
+	printf("DB_SITE_LIST paso coneccion a base\n");
 	*data=(char *)realloc(*data,size);
 	strcpy(*data,"200|[");
+	printf("DB_SITE_LIST paso strcpy\n");
 	while(row = mysql_fetch_row(result)){
 		exist = 1;
 		printf("Agregando\n");
@@ -681,6 +694,7 @@ void db_site_list(T_db *db, char **data, char *susc_id){
 		}
 		sprintf(*data,"%s{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",*data,row[0],row[1],row[2]);
 	}
+	printf("DB_SITE_LIST: TERMINO WHILE %s\n");
 	if(exist){
 		(*data)[strlen(*data) - 1] = ']';
 	} else {
