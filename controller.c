@@ -7,15 +7,16 @@
 #include "logs.h"
 #include "config.h"
 #include "server.h"
+#include "lista.h"
 
 /********************************
  * 	Variables GLOBALES	*
  ********************************/
 T_config config;
 T_logs logs;
-T_list_worker workers;
-T_list_proxy proxys;
-T_list_site sites;
+T_lista workers;
+T_lista proxys;
+T_lista sites;
 T_db db;
 T_server server;
 
@@ -23,43 +24,43 @@ T_server server;
  * 	FUNCIONES		*
  ********************************/
 
-void assign_proxys_site(T_list_proxy *proxys, T_site *site){
+void assign_proxys_site(T_lista *proxys, T_site *site){
 	/* Actualizamos el sitio en los proxys */
 	T_proxy *proxy;
 
-	list_proxy_first(proxys);
-	while(!list_proxy_eol(proxys)){
-		proxy = list_proxy_get(proxys);
+	lista_first(proxys);
+	while(!lista_eol(proxys)){
+		proxy = lista_get(proxys);
 		proxy_change_site(proxy,site);
-		list_proxy_next(proxys);
+		lista_next(proxys);
 	}
 }
 
-void assign_proxys_sites(T_list_proxy *proxys, T_list_site *sites){
-	/* Actualizamos los sitios todos en los proxys */
+void assign_proxys_sites(T_lista *proxys, T_lista *sites){
+	/* Actualizamos todos los sitios en los proxys */
 	T_proxy *proxy;
 	T_site *site;
 
-	list_site_first(sites);
-	while(!list_site_eol(sites)){
-		site = list_site_get(sites);
-		list_proxy_first(proxys);
-		while(!list_proxy_eol(proxys)){
-			proxy = list_proxy_get(proxys);
+	lista_first(sites);
+	while(!lista_eol(sites)){
+		site = lista_get(sites);
+		lista_first(proxys);
+		while(!lista_eol(proxys)){
+			proxy = lista_get(proxys);
 			if(proxy_get_status(proxy) == P_ONLINE ||
 			   proxy_get_status(proxy) == P_PREPARED){
 				printf("entro\n");
 				proxy_change_site(proxy,site);
 				printf("salio\n");
 			}
-			list_proxy_next(proxys);
+			lista_next(proxys);
 		}
-		list_site_next(sites);
+		lista_next(sites);
 	}
 	printf("termino\n");
 }
 
-void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys, T_logs *logs){
+void init_sync(T_lista *workers, T_lista *sites, T_lista *proxys, T_logs *logs){
 	/* Al iniciar el controller, se encarga de sincronizar el mismo
 	   con los workers. Esto es... se obtiene de cada worker fisico W_ONLINE
 	   los sitios a los que responde y se cargan en el worker logico.
@@ -68,18 +69,18 @@ void init_sync(T_list_worker *workers, T_list_site *sites, T_list_proxy *proxys,
 	T_worker *worker;
 
 	logs_write(logs,L_DEBUG,"INIT_SYNC:","Iniciando sincronismo");
-	list_worker_first(workers);
-	while(!list_worker_eol(workers)){
-		worker = list_worker_get(workers);
+	lista_first(workers);
+	while(!lista_eol(workers)){
+		worker = lista_get(workers);
 		worker_sync(worker,sites);
-		list_worker_next(workers);
+		lista_next(workers);
 	}
 	/* Reconfiguramos todos los proxys */
 	assign_proxys_sites(proxys,sites);
 	logs_write(logs,L_DEBUG,"INIT_SYNC:","Fin sincronismo");
 }
 
-int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *site){
+int select_workers(T_lista *workers, T_lista *candidates, T_site *site){
 	/* Selecciona los workers candidatos para asignar un sitio
 	 * que necesite n cantidad de ellos */
 	/* La condicion de momento es workers activos con menor carga (load average) */
@@ -91,29 +92,29 @@ int select_workers(T_list_worker *workers, T_list_worker *candidates, T_site *si
 
 	printf("Seleccionamos los workers\n");
 	/* Para pruebas ordenamos por cantidad de sitios */
-	list_worker_sort_by_site(workers,0);
-	//list_worker_sort_by_load(workers,0);
-	list_worker_first(workers);
+	lista_sort(workers,worker_num_sites,0);
+	//lista_sort_by_load(workers,0);
+	lista_first(workers);
 	while((site_get_real_size(site) + cant) < site_get_size(site)
-	     && !list_worker_eol(workers)){
-		worker = list_worker_get(workers);
+	     && !lista_eol(workers)){
+		worker = lista_get(workers);
 		printf("Verificamos worker para candidato\n");
 		printf("	Name: %s\n",worker_get_name(worker));
 		itowstatus(worker_get_status(worker),aux);
 		printf("	Status: %s\n",aux);
 		printf("	id: %i\n",worker_get_id(worker));
 		if((worker_get_status(worker) == W_ONLINE)
-		&& (!list_worker_find_id(site_get_workers(site),worker_get_id(worker)))){
+		&& (!lista_find(site_get_workers(site),worker_get_id,worker_get_id(worker)))){
 			printf("Worker %s es candidato\n",worker_get_name(worker));
-			list_worker_add(candidates,list_worker_get(workers));
+			lista_add(candidates,lista_get(workers));
 			cant++;
 		}
-		list_worker_next(workers);
+		lista_next(workers);
 	}
-	return list_worker_size(candidates);
+	return lista_size(candidates);
 }
 
-int assign_workers(T_list_worker *candidates, T_list_proxy *proxys,
+int assign_workers(T_lista *candidates, T_lista *proxys,
 		   T_site *site, T_config *config){
 	/* Asigna un sitio a cada worker de la lista pasada
 	 * por parametro. Retorna la cantidad de workers donde se pudo
@@ -123,38 +124,39 @@ int assign_workers(T_list_worker *candidates, T_list_proxy *proxys,
 	int cant=0;
 
 	printf("Comenzamos a asignar workers\n");
-	list_worker_first(candidates);
+	lista_first(candidates);
 	/* Agregamos el sitio a los workers */
-	while(!list_worker_eol(candidates)){
-		worker = list_worker_get(candidates);
+	while(!lista_eol(candidates)){
+		worker = lista_get(candidates);
 		if(worker_add_site(worker,site))
 			cant++;
-		list_worker_next(candidates);
+		lista_next(candidates);
 	}
 	assign_proxys_site(proxys,site);
 	return cant;
 }
 
-int des_assign_workers(T_site *site, T_list_worker *workers){
+int des_assign_workers(T_site *site, T_lista *workers){
 	/* Quita workers de un sitio en el cual excede su cantidad
 	Los workers que se eliminan son los que tengan mayor carga (load average) */
 
 	int cant=0;
 	T_worker *worker;
 
-	list_worker_sort_by_load(site_get_workers(site),1);
+	lista_sort(site_get_workers(site),worker_get_load,1);
 	while(site_get_real_size(site) > site_get_size(site)){
-		worker = list_worker_remove(site_get_workers(site));
+		worker = lista_remove(site_get_workers(site));
 		if(worker){
 			cant++;
 			/* Removemos ahora del worker el sitio*/
-			list_site_remove_id(worker_get_sites(worker),site_get_id(site));
+			//lista_remove_id(worker_get_sites(worker),site_get_id(site));
+			lista_exclude(worker_get_sites(worker),site_get_id,site_get_id(site));
 		}
 	}
 	return cant;
 }
 
-int balance_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *config){
+int balance_workers(T_lista *workers, T_lista *proxys, T_config *config){
 
 	/* Se basa en que todos los workers son compartidos.
  	 * Determina que worker esta sobre cargado e intenta
@@ -170,38 +172,38 @@ int balance_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *conf
 
 	printf("---- BALANCE -----\n");
 
-	list_worker_sort_by_site(workers,1);
-	//list_worker_sort_by_load(workers,1);
+	lista_sort(workers,worker_num_sites,1);
+	//lista_sort_by_load(workers,1);
 	
 	/* Buscamos el worker menos cargado activo */
-	list_worker_first(workers);
-	while(!list_worker_eol(workers)){
-		if(worker_get_status(list_worker_get(workers)) == W_ONLINE)
-			wlast = list_worker_get(workers);
-		list_worker_next(workers);
+	lista_first(workers);
+	while(!lista_eol(workers)){
+		if(worker_get_status(lista_get(workers)) == W_ONLINE)
+			wlast = lista_get(workers);
+		lista_next(workers);
 	}
 
 	/*Buscamos el worker mas cargado activo */
-	list_worker_first(workers);
-	while((wfirst == NULL) && !list_worker_eol(workers)){
-		if(worker_get_status(list_worker_get(workers)) == W_ONLINE)
-			wfirst = list_worker_get(workers);
-		list_worker_next(workers);
+	lista_first(workers);
+	while((wfirst == NULL) && !lista_eol(workers)){
+		if(worker_get_status(lista_get(workers)) == W_ONLINE)
+			wfirst = lista_get(workers);
+		lista_next(workers);
 	}
 
 	if((wfirst != wlast) && (wfirst!=NULL)){
-		printf("wfirst: %i - wlast: %i\n",list_site_size(worker_get_sites(wfirst)),list_site_size(worker_get_sites(wlast)));
+		printf("wfirst: %i - wlast: %i\n",lista_size(worker_get_sites(wfirst)),lista_size(worker_get_sites(wlast)));
 		//if(worker_get_load(wfirst) > worker_get_load(wlast) * (1+config_load_average(config)/100)){
-		if((list_site_size(worker_get_sites(wfirst))) > (list_site_size(worker_get_sites(wlast))+1)){
+		if((lista_size(worker_get_sites(wfirst))) > (lista_size(worker_get_sites(wlast))+1)){
 			/* Desbalaceo de carga. Buscamos el sitio a mover */
 			/* De momento movemos el primero que no se encuentre en el worker de destino.
   			 * A futuro podría ser el que mas demanda procesador */
-			list_site_first(worker_get_sites(wfirst));
-			while(!encontro && !list_site_eol(worker_get_sites(wfirst))){
-				site = list_site_get(worker_get_sites(wfirst));
+			lista_first(worker_get_sites(wfirst));
+			while(!encontro && !lista_eol(worker_get_sites(wfirst))){
+				site = lista_get(worker_get_sites(wfirst));
 				/* Verificamos que el sitio no este ya en el worker
 				 * de destino */
-				if(!list_worker_find_id(site_get_workers(site),worker_get_id(wlast))){
+				if(!lista_find(site_get_workers(site),worker_get_id,worker_get_id(wlast))){
 					/* El sitio no se encuentra en el worker de destino
  					   lo movemos */
 					worker_remove_site(wfirst,site);
@@ -217,17 +219,17 @@ int balance_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *conf
 		return 0;
 }
 
-int reload_services(T_list_worker *workers, T_list_proxy *proxys){
+int reload_services(T_lista *workers, T_lista *proxys){
 
-	list_worker_first(workers);
-	while(!list_worker_eol(workers)){
-		worker_reload(list_worker_get(workers));
-		list_worker_next(workers);
+	lista_first(workers);
+	while(!lista_eol(workers)){
+		worker_reload(lista_get(workers));
+		lista_next(workers);
 	}
-	list_proxy_first(proxys);
-	while(!list_proxy_eol(proxys)){
-		proxy_reload(list_proxy_get(proxys));
-		list_proxy_next(proxys);
+	lista_first(proxys);
+	while(!lista_eol(proxys)){
+		proxy_reload(lista_get(proxys));
+		lista_next(proxys);
 	}
 }
 
@@ -241,14 +243,14 @@ void check_db(T_db *db){
 	printf("Termina chequeo DB\n");
 }
 
-int check_proxys(T_list_proxy *proxys, T_list_site *sites){
+int check_proxys(T_lista *proxys, T_lista *sites){
 
 	T_proxy *proxy;
 	int cambio = 0;
 
-	list_proxy_first(proxys);
-	while(!list_proxy_eol(proxys)){
-		proxy = list_proxy_get(proxys);
+	lista_first(proxys);
+	while(!lista_eol(proxys)){
+		proxy = lista_get(proxys);
 		printf("Chequeando proxy %s\n",proxy_get_name(proxy));
 		if(proxy_check(proxy)){
 			printf("Proxy cambio de estado\n");
@@ -264,26 +266,26 @@ int check_proxys(T_list_proxy *proxys, T_list_site *sites){
 			}
 			cambio=1;
 		}
-		list_proxy_next(proxys);
+		lista_next(proxys);
 	}
 	return cambio;
 }
 
-int check_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *config){
+int check_workers(T_lista *workers, T_lista *proxys, T_config *config){
 	/* Verifica el estado de un worker y en base al mismo toma acciones. */
 	/* Retorna 1 si hubo cambios */
 	
 	printf("\n--INI: Proceso check_workers\n");
 	T_worker *worker;
-	T_list_site aux_sites;
+	T_lista aux_sites;
 	char status[20];
 	int cambio = 0;
 	char last_status[20];
 
-	list_worker_first(workers);
-	printf("Cantidad Workers: %i\n",list_worker_size(workers));
-	while(!list_worker_eol(workers)){
-		worker = list_worker_get(workers);
+	lista_first(workers);
+	printf("Cantidad Workers: %i\n",lista_size(workers));
+	while(!lista_eol(workers)){
+		worker = lista_get(workers);
 		
 		printf("\tSolicitamos check al worker %s\n",worker_get_name(worker));
 		if(worker_check(worker)){
@@ -291,20 +293,20 @@ int check_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *config
 			itowstatus(worker_get_status(worker),status);
 			itowstatus(worker_get_last_status(worker),last_status);
 			printf("\tlast_status %s -> status %s\n",last_status,status);
-			list_site_init(&aux_sites);
+			lista_init(&aux_sites,sizeof(T_site));
 			if((worker_get_status(worker) == W_OFFLINE)){
 				/* Worker pasa a OFFLINE. Despoblamos de sitios */
-				list_site_copy(worker_get_sites(worker),&aux_sites);
+				lista_copy(worker_get_sites(worker),&aux_sites);
 				worker_purge(worker);
 				assign_proxys_sites(proxys,&aux_sites);
-				list_site_erase(&aux_sites);
+				lista_erase(&aux_sites);
 			}
 			if((worker_get_status(worker) == W_PREPARED)){
 				/* Worker se recupera de una falla */
-				list_site_copy(worker_get_sites(worker),&aux_sites);
+				lista_copy(worker_get_sites(worker),&aux_sites);
 				worker_purge(worker);
 				assign_proxys_sites(proxys,&aux_sites);
-				list_site_erase(&aux_sites);
+				lista_erase(&aux_sites);
 			}
 			if((worker_get_status(worker) == W_ONLINE) &&
 			   (worker_get_last_status(worker) == W_PREPARED)){
@@ -319,45 +321,45 @@ int check_workers(T_list_worker *workers, T_list_proxy *proxys, T_config *config
 				printf("\tWorker %s paso de ONLINE a estado FALLANDO.\n",
 					worker_get_name(worker));
 				/* Worker estaba online y ha sufrido un fallo */
-				list_site_copy(worker_get_sites(worker),&aux_sites);
+				lista_copy(worker_get_sites(worker),&aux_sites);
 				worker_purge(worker);
 				assign_proxys_sites(proxys,&aux_sites);
-				list_site_erase(&aux_sites);
+				lista_erase(&aux_sites);
 				/* El proceso normalice_sites se encargara de asignar
 				   los sitios que se han eliminado del worker con falla */
 			}
 			cambio=1;
 		}
 
-		list_worker_next(workers);
+		lista_next(workers);
 	}
 	printf("--FIN: Proceso check_workers\n");
 	return cambio;
 }
 
-int normalice_sites(T_list_site *sites, T_list_worker *workers,
-		    T_list_proxy *proxys, T_config *config){
+int normalice_sites(T_lista *sites, T_lista *workers,
+		    T_lista *proxys, T_config *config){
 	/* Recorre la lista de sitios buscando sitios donde la
 	 * cantidad de workers asignados no sea la adecuada */
 
 	/* Retorna 1 si al menos se a producido un cambio */
 
 	T_site *site;
-	T_list_worker candidates;
+	T_lista candidates;
 	int siterealsize;
 	int changed = 0;
 
 	printf("\n----- NORMALICE ----\n");
-	list_site_print(sites);
-	list_site_first(sites);
-	list_worker_init(&candidates);
-	while(!list_site_eol(sites)){
-		site = list_site_get(sites);
+	//lista_print(sites);
+	lista_first(sites);
+	lista_init(&candidates,sizeof(T_worker));
+	while(!lista_eol(sites)){
+		site = lista_get(sites);
 		siterealsize = site_get_real_size(site);
 		printf("\tRevisamos el sitio %s - real %i: need %i\n",site_get_name(site),siterealsize,site_get_size(site));
 		if(siterealsize < site_get_size(site)){
 			/* Estan faltando workers */
-			list_worker_erase(&candidates);
+			lista_erase(&candidates);
 			if(select_workers(workers,&candidates,site)){
 				printf("\tAsignamos los workers\n");
 				changed |= assign_workers(&candidates,proxys,site,config);
@@ -369,9 +371,9 @@ int normalice_sites(T_list_site *sites, T_list_worker *workers,
 				changed |= des_assign_workers(site,workers);
 			}
 		}
-		list_site_next(sites);
+		lista_next(sites);
 	}
-	list_worker_erase(&candidates);
+	lista_erase(&candidates);
 	printf("\n----- FIN NORMALICE ----\n");
 	return changed;
 }
@@ -407,9 +409,9 @@ void main(){
 	logs_write(&logs,L_INFO,"Start Controller","");
 
 	/* Iniciamos estructuras */
-	list_worker_init(&workers);
-	list_site_init(&sites);
-	list_proxy_init(&proxys);
+	lista_init(&workers,sizeof(T_worker));
+	lista_init(&sites,sizeof(T_site));
+	lista_init(&proxys,sizeof(T_proxy));
 
 	/* Conectamos contra la base de datos */
 	db_init(&db,&config,&logs);
@@ -418,16 +420,22 @@ void main(){
 		exit(1);
 	}
 	/* Cargamos los datos de la base de datos */
+	printf("Controller: Cargando sitios\n");
 	if(!db_load_sites(&db,&sites,error,&db_fail)){
 		logs_write(&logs,L_ERROR,"Error al cargar los sitios desde la base de datos","");
+		printf("Error al cargar los sitios\n");
 		exit(1);
 	}
+	printf("Controller: Cargando workers\n");
 	if(!db_load_workers(&db,&workers,error,&db_fail)){
 		logs_write(&logs,L_ERROR,"Error al cargar los workers desde la base de datos","");
+		printf("Error al cargar los workers\n");
 		exit(1);
 	}
+	printf("Controller: Cargando proxys\n");
 	if(!db_load_proxys(&db,&proxys,error,&db_fail)){
 		logs_write(&logs,L_ERROR,"Error al cargar los proxys desde la base de datos","");
+		printf("Error al cargar los proxys\n");
 		exit(1);
 	}
 
@@ -443,20 +451,22 @@ void main(){
 
 	/* Comenzamos el loop del controller */
 	while(1){
-		sleep(10);
+		printf("Loop\n");
+		sleep(100);
 		//continue;
 		changed = 0;
 		server_lock(&server);
 			/* Chequeo de workers */
 			check_workers(&workers,&proxys,&config);
-			if(changed){ printf("@@@@@@@ check_workers CAMBIO\n"); }
+			if(changed)
+				printf("@@@@@@@ check_workers CAMBIO\n");
 			/* Chequeo de proxys */
 			check_proxys(&proxys,&sites);	//No tiene sentido reiniciar todo
-			//if(changed){ printf("@@@@@@@ check_proxys CAMBIO\n"); }
 			
 			/* Asignacion sitios a worker */
 			changed |= normalice_sites(&sites, &workers, &proxys, &config);
-			if(changed){ printf("@@@@@@@ normalice_sites CAMBIO\n"); }
+			if(changed)
+				printf("@@@@@@@ normalice_sites CAMBIO\n");
 	
 			/* Balanceamos workers */
 			changed |= balance_workers(&workers,&proxys,&config);
@@ -472,7 +482,7 @@ void main(){
 		printf("Fin del bucle");
 	}
 
-	/* Finalizamos el hilo del rest_server */
+	/* Finalizamos el hilo del server */
 
 	/* Finalizamos la conexion a la base */
 	db_close(&db);

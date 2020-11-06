@@ -1,6 +1,69 @@
 #include "json.h"
 
-void json_servers(char **data, T_list_worker *workers, T_list_proxy *proxys, T_db *db){
+void json_mysql_result_row(MYSQL_ROW *row, char *col_names[50], int cant_cols, char **message){
+	/* Retorna en formato json una fila */
+	int i = 0;
+	int e = 0;
+	char element[1000];
+
+	printf("Estamos aca 2:%i\n",cant_cols);
+	dim_copy(message,"{");
+	i = 0;
+	while(i<cant_cols){
+		e = 1;
+		printf("COLUMNAS %s\n",col_names[i]);
+		sprintf(element,"\"%s\":\"%s\",",col_names[i],row[i]);
+		dim_concat(message,element);
+		i++;
+	}
+	/* Eliminamos la ultima "," entre variables */
+	if(e){
+        (*message)[strlen(*message) - 1] = '}';
+	} else {
+		dim_concat(message,"}");
+	}
+}
+
+
+void json_mysql_result(MYSQL_RES *result, char **message){
+	/* Retorna un resultado Mysql como JSON */
+	MYSQL_ROW *row;
+	MYSQL_FIELD *field;
+	int e1,e2 = 0;
+	char *element = NULL;
+	int fields = 0;
+	int i;
+	char *col_names[50];
+
+	printf("Estamos aca\n");
+	/* Cargamos el array con los nombres de los campos */
+	i = 0;
+	while(field = mysql_fetch_field(result)){
+		col_names[i] = field->name;
+		fields++;
+		i++;
+	}
+	printf("Estamos aca 2\n");
+
+	dim_init(message);
+	dim_concat(message,"[");
+	e2 = 0;
+	printf("Estamos aca 3\n");
+	while(row = mysql_fetch_row(result)){
+		json_mysql_result_row(row, col_names, fields, &element);
+		e2 = 1;
+		dim_concat(message,element);
+		dim_concat(message,",");
+	}
+	/* Eliminamos la ultima "," entre elementos */
+	if(e2){
+        (*message)[strlen(*message) - 1] = ']';
+    } else {
+		dim_concat(message,"]");
+    }
+}
+
+void json_servers(char **data, T_lista *workers, T_lista *proxys, T_db *db){
 	/* Retorna los id de todos los workers y proxys existentes y alguna otra info relevante */
 	/* Realoca la memoria de data y retorna el tamano en size, si es que no entran los datos */
 
@@ -11,9 +74,9 @@ void json_servers(char **data, T_list_worker *workers, T_list_proxy *proxys, T_d
 
 	*data = (char *) realloc(*data,real_size * sizeof(char));
 	strcpy(*data,"200|[");
-	list_worker_first(workers);
-	while(!list_worker_eol(workers)){
-		worker = list_worker_get(workers);
+	lista_first(workers);
+	while(!lista_eol(workers)){
+		worker = lista_get(workers);
 		if((100 + strlen(*data)) > real_size){
 			/* Los datos pueden superan el espacio de data */
 			real_size += 100;
@@ -22,11 +85,11 @@ void json_servers(char **data, T_list_worker *workers, T_list_proxy *proxys, T_d
 		itowstatus(worker_get_status(worker),status);
 		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":\"worker\",\"status\":\"%s\"},",
 			*data,worker_get_id(worker),worker_get_name(worker),status);
-		list_worker_next(workers);
+		lista_next(workers);
 	}
-	list_proxy_first(proxys);
-	while(!list_proxy_eol(proxys)){
-		proxy = list_proxy_get(proxys);
+	lista_first(proxys);
+	while(!lista_eol(proxys)){
+		proxy = lista_get(proxys);
 		if((100 + strlen(*data)) > real_size){
 			/* Los datos pueden superan el espacio de data */
 			real_size += 100;
@@ -35,7 +98,7 @@ void json_servers(char **data, T_list_worker *workers, T_list_proxy *proxys, T_d
 		itopstatus(proxy_get_status(proxy),status);
 		sprintf(*data,"%s{\"id\":%lu,\"name\":\"%s\",\"rol\":\"proxy\",\"status\":\"%s\"},",
 			*data,proxy_get_id(proxy),proxy_get_name(proxy),status);
-		list_proxy_next(proxys);
+		lista_next(proxys);
 	}
 	(*data)[strlen(*data)-1] = ']';
 }
@@ -86,9 +149,9 @@ int json_worker(char **data, T_worker *worker, T_db *db){
 	strcat(*data,"\",\"sites\":[ ");
 
 	/* Poblamos con los sitios */
-	list_site_first(worker_get_sites(worker));
-	while(!list_site_eol(worker_get_sites(worker))){
-		site = list_site_get(worker_get_sites(worker));
+	lista_first(worker_get_sites(worker));
+	while(!lista_eol(worker_get_sites(worker))){
+		site = lista_get(worker_get_sites(worker));
 		name = site_get_name(site);
 		sprintf(id,"%lu",site_get_id(site));
 		if(real_size < (strlen(name) + strlen(aux) + strlen(*data) + 100)){
@@ -101,7 +164,7 @@ int json_worker(char **data, T_worker *worker, T_db *db){
 		strcat(*data,"\",\"name\":\"");
 		strcat(*data,site_get_name(site));
 		strcat(*data,"\"},");
-		list_site_next(worker_get_sites(worker));
+		lista_next(worker_get_sites(worker));
 	}
 	*data = (char *) realloc(*data,(strlen(*data)+3) * sizeof(char));
 	(*data)[strlen(*data)-1] = ']';

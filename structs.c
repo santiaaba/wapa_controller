@@ -24,31 +24,41 @@ void itopstatus(T_proxy_status i, char *name){
 	}
 }
 
+void int_to_4bytes(uint32_t *i, char *_4bytes){
+    memcpy(_4bytes,i,4);
+}
+
+void _4bytes_to_int(char *_4bytes, uint32_t *i){
+    memcpy(i,_4bytes,4);
+}
 
 /*****************************
 	 Sitios
 ******************************/
 void site_init(T_site *s, char *name, unsigned int id, char *dir,
 	       unsigned int version, unsigned int size){
-	s->workers = (T_list_worker*)malloc(sizeof(T_list_worker));
-	s->alias = (T_list_s_e*)malloc(sizeof(T_list_s_e));
-	s->indexes = (T_list_s_e*)malloc(sizeof(T_list_s_e));
-	list_worker_init(s->workers);
-	list_s_e_init(s->alias);
-	list_s_e_init(s->indexes);
+
+	s->workers = (T_lista*)malloc(sizeof(T_lista));
+	s->alias = (T_lista*)malloc(sizeof(T_lista));
+	s->indexes = (T_lista*)malloc(sizeof(T_lista));
+	s->dir = NULL;
+
+	lista_init(s->workers,sizeof(T_worker));
+	lista_init(s->alias,sizeof(T_s_e));
+	lista_init(s->indexes,sizeof(T_s_e));
 	strcpy(s->name,name);
-	strcpy(s->dir,dir);
+	dim_copy(&(s->dir),dir);
 	s->status = W_ONLINE;
 	s->id = id;
 	s->version = version;
 	s->size = size;
 }
 
-T_list_worker *site_get_workers(T_site *s){
+T_lista *site_get_workers(T_site *s){
 	return s->workers;
 }
 
-unsigned int site_get_id(T_site *s){
+int site_get_id(T_site *s){
 	return s->id;
 }
 
@@ -69,14 +79,14 @@ unsigned int site_get_size(T_site *s){
 }
 
 unsigned int site_get_real_size(T_site *s){
-	return list_worker_size(s->workers);
+	return lista_size(s->workers);
 }
 
-T_list_s_e *site_get_alias(T_site *s){
+T_lista *site_get_alias(T_site *s){
 	return s->alias;
 }
 
-T_list_s_e *site_get_indexes(T_site *s){
+T_lista *site_get_indexes(T_site *s){
 	return s->indexes;
 }
 
@@ -99,11 +109,11 @@ void site_update(T_site *s){
 	 * del sitio */
 	T_worker *worker;
 
-	list_worker_first(site_get_workers(s));
-	while(!list_worker_eol(site_get_workers(s))){
-		worker = list_worker_get(site_get_workers(s));
+	lista_first(site_get_workers(s));
+	while(!lista_eol(site_get_workers(s))){
+		worker = lista_get(site_get_workers(s));
 		worker_add_site(worker,s);
-		list_worker_next(site_get_workers(s));
+		lista_next(site_get_workers(s));
 	}
 }
 
@@ -121,11 +131,12 @@ void site_start(T_site *s){
 	 Workers
 ******************************/
 void worker_init(T_worker *w, int id, char *name, char *ip, T_worker_status s){
+	printf("worker_init entro\n");
 	strcpy(w->name,name);
 	strcpy(w->ip,ip);
 	w->id = id;
-	w->sites = (T_list_site*)malloc(sizeof(T_list_site));
-	list_site_init(w->sites);
+	w->sites = (T_lista*)malloc(sizeof(T_lista));
+	lista_init(w->sites,sizeof(T_site));
 	w->laverage = 0.0;
 	w->server.sin_addr.s_addr = inet_addr(ip);
 	w->server.sin_family = AF_INET;
@@ -135,6 +146,7 @@ void worker_init(T_worker *w, int id, char *name, char *ip, T_worker_status s){
 	w->time_change_status = time(0);
 	w->is_changed = 0;
 	worker_connect(w);
+	printf("worker_init salio\n");
 }
 int worker_connect(T_worker *w){
 	/* Funcion de uso interno */
@@ -142,8 +154,11 @@ int worker_connect(T_worker *w){
 
 	close(w->socket);
 	w->socket = socket(AF_INET , SOCK_STREAM , 0);
-	if (connect(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server)) < 0){
+	printf("Intentando conectar worker\n");
+	if (connect_wait(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server),5) != 0){
+	//if (connect(w->socket , (struct sockaddr *) &(w->server) , sizeof(w->server)) < 0){
 		printf("Worker %s NO CONECTA\n",w->name);
+		w->socket=0;
 		return 0;
 	}
 	printf("Worker %s CONECTO\n",w->name);
@@ -196,6 +211,10 @@ void worker_update_state(T_worker *w){
 	w->status;
 }
 
+float worker_num_sites(T_worker *w){
+	return (float)lista_size(w->sites);
+}
+
 void worker_start(T_worker *w){
 	worker_change_status(w,W_PREPARED);
 }
@@ -217,7 +236,7 @@ float worker_get_load(T_worker *w){
 	//return 0.0;
 }
 
-T_list_site *worker_get_sites(T_worker *w){
+T_lista *worker_get_sites(T_worker *w){
 	return w->sites;
 }
 
@@ -233,20 +252,20 @@ void worker_purge(T_worker *w){
 	sprintf(send_message,"P");
 	printf("PURGE: Eliminamos sitios fisicos\n");
 	if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
-		list_site_first(w->sites);
+		lista_first(w->sites);
 		printf("PURGE: Eliminamos sitios logicos\n");
 		printf("PURGE: Entrando while\n");
-		printf("El worker %s posee %i sitios\n",worker_get_name(w),list_site_size(w->sites));
-		while(!list_site_eol(w->sites)){
+		printf("El worker %s posee %i sitios\n",worker_get_name(w),lista_size(w->sites));
+		while(!lista_eol(w->sites)){
 			printf("Obteniendo sitio\n");
-			site = list_site_get(w->sites);
+			site = lista_get(w->sites);
 			printf("PURGE: Removiendo worker del sitio\n");
-			list_worker_remove_id(site_get_workers(site),worker_get_id(w));
+			lista_exclude(site_get_workers(site),worker_get_id,worker_get_id(w));
 			printf("PURGE: proximo sitio\n");
-			list_site_next(w->sites);
+			lista_next(w->sites);
 		}
 		printf("PURGE: borrando lista de sitios del worker\n");
-		list_site_erase(w->sites);
+		lista_erase(w->sites);
 	}
 	free(rcv_message);
 }
@@ -334,11 +353,11 @@ int worker_add_site(T_worker *w, T_site *s){
 
 	// Armar los alias
 	printf("WORKER_ADD_SITE: armamos alias\n");
-	list_s_e_first(site_get_alias(s));
+	lista_first(site_get_alias(s));
 	ok=0;
-	while(!list_s_e_eol(site_get_alias(s))){
+	while(!lista_eol(site_get_alias(s))){
 		ok = 1;
-		aux_s_e = list_s_e_get(site_get_alias(s));
+		aux_s_e = lista_get(site_get_alias(s));
 		printf("alias agregado: %s\n",s_e_get_name(aux_s_e));
 		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
 		if(send_message_size < strlen(send_message) + strlen(aux) + 2){
@@ -347,7 +366,7 @@ int worker_add_site(T_worker *w, T_site *s){
 			send_message = (char *)realloc(send_message,send_message_size);
 		}
 		strcat(send_message,aux);
-		list_s_e_next(site_get_alias(s));
+		lista_next(site_get_alias(s));
 	}
 	if(ok)
 		send_message[strlen(send_message)-1] = '|';
@@ -356,11 +375,11 @@ int worker_add_site(T_worker *w, T_site *s){
 
 	// Armar los indices
 	printf("WORKER_ADD_SITE: armamos indices\n");
-	list_s_e_first(site_get_indexes(s));
+	lista_first(site_get_indexes(s));
 	ok=0;
-	while(!list_s_e_eol(site_get_indexes(s))){
+	while(!lista_eol(site_get_indexes(s))){
 		ok=1;
-		aux_s_e = list_s_e_get(site_get_indexes(s));
+		aux_s_e = lista_get(site_get_indexes(s));
 		printf("index agregado: %s\n",s_e_get_name(aux_s_e));
 		sprintf(aux,"%s,",s_e_get_name(aux_s_e));
 		if(send_message_size < strlen(send_message) + strlen(aux) + 2){
@@ -368,7 +387,7 @@ int worker_add_site(T_worker *w, T_site *s){
 			send_message = (char *)realloc(send_message,send_message_size);
 		}
 		strcat(send_message,aux);
-		list_s_e_next(site_get_indexes(s));
+		lista_next(site_get_indexes(s));
 	}
 	if(ok)
 		send_message[strlen(send_message)-1] = '\0';
@@ -381,8 +400,8 @@ int worker_add_site(T_worker *w, T_site *s){
 	ok=1;
 	if(worker_send_receive(w,send_message,send_message_size,&rcv_message,&rcv_message_size)){
 		if(rcv_message[0] == '1'){
-			list_site_add(w->sites,s);
-			list_worker_add(site_get_workers(s),w);
+			lista_add(w->sites,s);
+			lista_add(site_get_workers(s),w);
 		}  else {
 			ok=0;
 		}
@@ -404,8 +423,8 @@ int worker_remove_site(T_worker *w, T_site *s){
 	sprintf(send_message,"d%s",site_get_name(s));
 
 	if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
-		list_site_remove_id(worker_get_sites(w),site_get_id(s));
-		list_worker_remove_id(site_get_workers(s),worker_get_id(w));
+		lista_exclude(worker_get_sites(w),site_get_id,site_get_id(s));
+		lista_exclude(site_get_workers(s),worker_get_id,worker_get_id(w));
 	} else {
 		ok=0;
 	}
@@ -433,6 +452,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 	/* Los 4 primeros bytes del header es el tamano total del mensaje */
 	int_to_4bytes(&send_message_size,buffer);
 
+	//printf("paso 1: %s - %i\n",send_message,send_message_size);
 	while(c < send_message_size){
 		/* Hay que incluir un header de tamano ROLE_HEADER_SIZE */
 		if(send_message_size - c + ROLE_HEADER_SIZE < ROLE_BUFFER_SIZE){
@@ -442,21 +462,28 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 			/* No entra todo en el buffer */
 			parce_size = ROLE_BUFFER_SIZE - ROLE_HEADER_SIZE;
 		}
+		//printf("paso 1.1 parce_size: %i\n",parce_size);
 		int_to_4bytes(&parce_size,&(buffer[4]));
+		//printf("paso 1.2\n");
 		memcpy(buffer + ROLE_HEADER_SIZE,send_message + c,parce_size);
+		//printf("paso 1.3\n");
 		c += parce_size;
+		printf("Enviando:'%s' size-fijo:%i\n", buffer,ROLE_BUFFER_SIZE);
 		if(send(w->socket,buffer,ROLE_BUFFER_SIZE,0)<0){
 			worker_change_status(w,W_UNKNOWN);
 			worker_connect(w);
 			return 0;
 		}
+		//printf("paso 1.4\n");
 	}
+	//printf("paso 2\n");
 
 	/* Recibir */
 	c=0;
 	/* Al menos una recepcion esperamos recibir */
 	int_to_4bytes(&c,buffer);
 	int_to_4bytes(&c,&(buffer[4]));
+	//printf("paso 3:\n");
 	do{
 		 if(recv(w->socket,buffer,ROLE_BUFFER_SIZE,0)<0){
 			worker_change_status(w,W_UNKNOWN);
@@ -468,7 +495,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 		if(first_message){
 			first_message=0;
 			_4bytes_to_int(buffer,rcv_message_size);
-			//printf("WORKER RCV: Nos enviaran: %u bytes\n",*rcv_message_size);
+			printf("WORKER RCV: Nos enviaran: %u bytes\n",*rcv_message_size);
 			*rcv_message=(char *)realloc(*rcv_message,*rcv_message_size);
 		}
 
@@ -480,7 +507,7 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
 	return 1;
 }
 
-int worker_sync(T_worker *w, T_list_site *s){
+int worker_sync(T_worker *w, T_lista *s){
 	/* Se conecta al worker, obtiene el listado
 	 * de sitios y actualiza las estructuras */
 
@@ -499,12 +526,13 @@ int worker_sync(T_worker *w, T_list_site *s){
 	if(!worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
 		ok=0;
 	}
+	printf("Mensaje obtenido worker: %s\n",rcv_message);
 	while(pos<rcv_message_size){
 		parce_data(rcv_message,'|',&pos,aux);
-		site = list_site_find_id(s,atoi(aux));
+		site = lista_find(s,site_get_id,atoi(aux));
 		if(site){
-			list_site_add(w->sites,site);
-			list_worker_add(site_get_workers(site),w);
+			lista_add(w->sites,site);
+			lista_add(site_get_workers(site),w);
 		} else {
 			/* Ese sitio ya no existe en el sistema. lo eliminamos del worker */
 			printf ("IMPLEMENTER ELIMINACION DEL WORKER SITIOS YA NO EXISTENTES\n");
@@ -552,7 +580,7 @@ int proxy_connect(T_proxy *p){
 
 	close(p->socket);
 	p->socket = socket(AF_INET , SOCK_STREAM , 0);
-	if (connect(p->socket , (struct sockaddr *) &(p->server) , sizeof(p->server)) < 0){
+	if (connect_wait(p->socket , (struct sockaddr *) &(p->server) , sizeof(p->server),5) != 0){
 		printf("Proxy %s NO CONECTA\n",p->name);
 		return 0;
 	}
@@ -618,7 +646,7 @@ void proxy_set_statistics(T_proxy *p, char *buffer_rx){
 	p->laverage = atof(aux);
 }
 
-void proxy_reconfig(T_proxy *p, T_list_site *sites){
+void proxy_reconfig(T_proxy *p, T_lista *sites){
 	/* Reconfigura un proxy en base a la informacion
 	   de los sitios. Borra toda configuracion anterior.
 	   De momento un proxy ve todos los sitios y no unos en particular */
@@ -629,11 +657,11 @@ void proxy_reconfig(T_proxy *p, T_list_site *sites){
 
 	sprintf(send_message,"D");
 	if(proxy_send_receive(p,send_message,2,&rcv_message,&rcv_message_size)){
-		list_site_first(sites);
-		while(!list_site_eol(sites)){
+		lista_first(sites);
+		while(!lista_eol(sites)){
 			printf("Agregamos el sitio al proxy\n");
-			proxy_add_site(p,list_site_get(sites));
-			list_site_next(sites);
+			proxy_add_site(p,lista_get(sites));
+			lista_next(sites);
 			printf("Sitio siguiente\n");
 		}
 	}
@@ -655,7 +683,7 @@ int proxy_add_site(T_proxy *p, T_site *s){
  	 * que agregarlo lo eliminamos */
 
 	send_message=(char *)malloc(100);
-	if(list_worker_size(site_get_workers(s)) == 0){
+	if(lista_size(site_get_workers(s)) == 0){
 		sprintf(send_message,"d%s",site_get_name(s));
 		send_message_size=strlen(send_message)+1;
 		if(!proxy_send_receive(p,send_message,send_message_size,&rcv_message,&rcv_message_size))
@@ -668,9 +696,9 @@ int proxy_add_site(T_proxy *p, T_site *s){
 			site_get_id(s),site_get_version(s));
 
 		printf("Armamos los workers\n");
-		list_worker_first(site_get_workers(s));
-		while(!list_worker_eol(site_get_workers(s))){
-			worker = list_worker_get(site_get_workers(s));
+		lista_first(site_get_workers(s));
+		while(!lista_eol(site_get_workers(s))){
+			worker = lista_get(site_get_workers(s));
 			sprintf(aux,"%s,",worker_get_name(worker));
 			if(send_message_size < strlen(send_message) + strlen(aux) + 2){
 				printf("allocando espacio\n");
@@ -678,14 +706,14 @@ int proxy_add_site(T_proxy *p, T_site *s){
 				send_message = (char *)realloc(send_message,send_message_size);
 			}
 			strcat(send_message,aux);
-			list_worker_next(site_get_workers(s));
+			lista_next(site_get_workers(s));
 		}
 		send_message[strlen(send_message)-1] = '|';
 		
 		printf("Armamos los alias\n");
-		list_s_e_first(site_get_alias(s));
-		while(!list_s_e_eol(site_get_alias(s))){
-			aux_s_e = list_s_e_get(site_get_alias(s));
+		lista_first(site_get_alias(s));
+		while(!lista_eol(site_get_alias(s))){
+			aux_s_e = lista_get(site_get_alias(s));
 			printf("alias agregado: %s\n",s_e_get_name(aux_s_e));
 			sprintf(aux,"%s,",s_e_get_name(aux_s_e));
 			if(send_message_size < strlen(send_message) + strlen(aux) + 2){
@@ -694,7 +722,7 @@ int proxy_add_site(T_proxy *p, T_site *s){
 				send_message = (char *)realloc(send_message,send_message_size);
 			}
 			strcat(send_message,aux);
-			list_s_e_next(site_get_alias(s));
+			lista_next(site_get_alias(s));
 		}
 		/* Normalizamos el send_message */
 		send_message_size = strlen(send_message)+1;
@@ -853,531 +881,24 @@ int proxy_send_receive(T_proxy *p, char *send_message, uint32_t send_message_siz
 }
 
 /*****************************
-	 Lista de Workers
-******************************/
-void list_worker_init(T_list_worker *l){
-	l->first = NULL;
-	l->actual = NULL;
-	l->last = NULL;
-	l->size = 0;
+	   string Element
+ ******************************/
+void s_e_init(T_s_e *a, unsigned int id, char *name){
+	a->id = id;
+	a->name = (char *)malloc(strlen(name)+1);
+	strcpy(a->name,name);
+	printf("Nombre copiado %s = %s\n",name,a->name);
 }
 
-void list_worker_add(T_list_worker *l, T_worker *w){
-	/* Agrega un worker al last de la lista.
-	 * El puntero actual no se modifica. Excepto que se
-	 * trate del primer elemento en ingresar a la lista
-	 * No contempla datos repetidos. Es responsabilidad de
-	 * la funcion llamadora */
-
-	list_w_node *new;
-	list_w_node *aux;
-
-	new = (list_w_node*)malloc(sizeof(list_w_node));
-	new->next = NULL;
-	new->data = w;
-	l->size++;
-
-	if(l->first == NULL){
-		l->first = new;
-		l->last = new;
-	} else {
-		l->last->next = new;
-		l->last = new;
-	}
+char *s_e_get_name(T_s_e *a){
+	return a->name;
 }
 
-void list_worker_copy(T_list_worker *l, T_list_worker *l2){
-	/* Copia la lista l a l2. Los elementos son el mismo
-	 * y no se copian sino que son punteros */
-	/* Se supone que l2 esta vacia e inicializada */
-
-	list_w_node *aux;
-
-	aux = l->first;
-	while(aux!=NULL){
-		list_worker_add(l2,aux->data);
-		aux = aux->next;
-	}
+int s_e_get_id(T_s_e *a){
+	return a->id;
 }
 
-void list_worker_first(T_list_worker *l){
-	/* Situa el puntero actual al inicio de la lista */
-	l->actual = l->first;
+void s_e_free(T_s_e **a){
+	free((*a)->name);
+	free(*a);
 }
-
-void list_worker_next(T_list_worker *l){
-	/* Avanza el puntero de actual al siguiente siempre que pueda */
-	if(l->actual != NULL){
-		l->actual = l->actual->next;
-	}
-}
-
-T_worker *list_worker_get(T_list_worker *l){
-	/* Retorna el elemento donde el puntero actual se
-	 * encuentre. */
-	if(l->actual!=NULL)
-		return l->actual->data;
-	else 
-		return NULL;
-}
-
-T_worker *list_worker_get_first(T_list_worker *l){
-	/* Retorna el primer elemento de la lista */
-	if(l->first!=NULL)
-		return l->first->data;
-	else
-		return NULL;
-}
-
-T_worker *list_worker_get_last(T_list_worker *l){
-	/* Retorna el ultimo elemento de la lista */
-	if(l->last!=NULL)
-		return l->last->data;
-	else
-		return NULL;
-}
-
-unsigned int list_worker_size(T_list_worker *l){
-	/* Retorna el largo de la lista */
-	return l->size;
-}
-
-int list_worker_eol(T_list_worker *l){
-	/* Retorna si el puntero actual esta al last
-	 * de la lista */
-	return (l->actual == NULL);
-}
-
-T_worker *list_worker_remove_id(T_list_worker *l, int w_id){
-	/* Elimina de la lista el nodo que contiene al worker.
- 	 * el puntero al worker es retornado */
-
-	int exist = 0;
-	list_w_node *aux;
-
-	printf("REMOVE ---- Removemos worker con id: %i\n",w_id);
-	l->actual = l->first;
-	while(!exist && l->actual != NULL){
-		printf("REMOVE ---- Comparamos %i con %i\n",worker_get_id(l->actual->data),w_id);
-		if(worker_get_id(l->actual->data) == w_id){
-			printf("list_worker_remove_id: Encontramos el worker a eliminar\n");
-			return list_worker_remove(l);
-		}
-		l->actual = l->actual->next;
-	}
-	return NULL;
-}
-
-T_worker *list_worker_remove(T_list_worker *l){
-	/* Elimina de la lista el nodo que contiene el elemento
- 	 * apuntado por el punero actual. El objeto dentro del nodo
- 	 * no se elimina.
- 	 * El puntero actual pasa al nodo siguiente. */
-
-	list_w_node *prio;
-	list_w_node *aux;
-	T_worker *element;
-
-	if(l->actual != NULL){
-		aux = l->first;
-		prio = NULL;
-		while(aux != l->actual){
-			prio = aux;
-			aux = aux->next;
-		}
-		if(prio == NULL){
-			l->first = aux->next;
-		} else {
-			prio->next = aux->next;
-		}
-		if(aux == l->last){
-			l->last = prio;
-		}
-		l->actual = aux->next;
-		element = aux->data;
-		free(aux);
-		l->size--;
-	}
-	return element;
-}
-
-void list_worker_erase(T_list_worker *l){
-	/* Vacia la lista sin eliminar los elementos. */
-	list_worker_first(l);
-	while(!list_worker_eol(l)){
-		list_worker_remove(l);
-	}
-}
-
-T_worker *list_worker_find_id(T_list_worker *l, int worker_id){
-	/* Retorna el worker buscando por su id. Si no
-	 * existe retorna null */
-
-	list_w_node *aux;
-	int exist = 0;
-
-	aux = l->first;
-	while(aux != NULL && !exist){
-		exist = (worker_get_id(aux->data) == worker_id);
-		if(!exist){ aux = aux->next;}
-	}
-	if(exist){
-		return aux->data;
-	} else {
-		return NULL;
-	}
-}
-
-void list_worker_sort_by_load(T_list_worker *l,int des){
-	/* Ordena la lista por la carga (load average) del worker */
-
-	T_worker *worker1, *worker2;
-	int i,j;
-
-	for(i=0;i<l->size - 1;i++){
-		list_worker_first(l);
-		for(j=1;j<l->size - i;j++){
-			worker1 = l->actual->data;
-			worker2 = l->actual->next->data;
-			if(des){
-				if(worker_get_load(worker1) < worker_get_load(worker2)){
-					l->actual->data = worker2;
-					l->actual->next->data = worker1;
-				}
-			} else {
-				if(worker_get_load(worker1) > worker_get_load(worker2)){
-					l->actual->data = worker2;
-					l->actual->next->data = worker1;
-				}
-			}
-			list_worker_next(l);
-		}
-	}
-}
-
-
-
-void list_worker_sort_by_site(T_list_worker *l,int des){
-	/* Ordena la lista por cantidad de sitios */
-
-	T_worker *worker1, *worker2;
-	int i,j;
-	for(i=1;i<l->size;i++){
-		l->actual = l->first;
-		for(j=1;j<=(l->size - i);j++){
-			worker1 = l->actual->data;
-			worker2 = l->actual->next->data;
-			if(des){
-				if((list_site_size(worker_get_sites(worker1))) <
-				   (list_site_size(worker_get_sites(worker2)))){
-					l->actual->data = worker2;
-					l->actual->next->data = worker1;
-				}
-			} else {
-				if((list_site_size(worker_get_sites(worker1))) >
-				   (list_site_size(worker_get_sites(worker2)))){
-					l->actual->data = worker2;
-					l->actual->next->data = worker1;
-				}
-			}
-			list_worker_next(l);
-		}
-	}
-}
-
-void list_worker_print(T_list_worker *l){
-	l->actual = l->first;
-	printf("PRINT WORKER\n");
-	while(l->actual != NULL){
-		printf("Print Worker: %s\n",worker_get_name(l->actual->data));
-		l->actual = l->actual->next;
-	}
-	printf("--------------\n");
-}
-
-/*****************************
-	 Lista de Sitios
-******************************/
-
-void list_site_init(T_list_site *l){
-	l->first = NULL;
-	l->actual = NULL;
-	l->last = NULL;
-	l->size = 0;
-}
-
-void list_site_add(T_list_site *l, T_site *s){
-	/* Agrega un sitio al final de la lista.
-	 * El puntero actual no se modifica. Excepto que se
-	 * trate del primer elemento en ingresar a la lista
-	 * No contempla datos repetidos. Es responsabilidad de
-	 * la funcion llamadora */
-
-	list_s_node *new;
-	list_s_node *aux;
-
-	new = (list_s_node*)malloc(sizeof(list_s_node));
-	new->next = NULL;
-	new->data = s;
-	l->size++;
-
-	if(l->first == NULL){
-		l->first = new;
-		l->last = new;
-	} else {
-		l->last->next = new;
-		l->last = new;
-	}
-}
-
-void list_site_first(T_list_site *l){
-	/* Situa el puntero actual al inicio de la lista */
-	l->actual = l->first;
-}
-
-void list_site_next(T_list_site *l){
-	/* Avanza el puntero de actual al siguiente siempre que pueda */
-	if(l->actual != NULL){
-		l->actual = l->actual->next;
-	}
-}
-
-void list_site_copy(T_list_site *l, T_list_site *l2){
-	/* Copia la lista l a l2. Los elementos son el mismo
-	 * y no se copian sino que son punteros */
-	/* Se supone que l2 esta vacia e inicializada */
-
-	list_s_node *aux;
-
-	aux = l->first;
-	while(aux!=NULL){
-		list_site_add(l2,aux->data);
-		aux = aux->next;
-	}
-}
-
-
-T_site *list_site_get(T_list_site *l){
-	/* Retorna el elemento donde el puntero actual se
-	 * encuentre. */
-	return l->actual->data;
-}
-
-T_site *list_site_find_id(T_list_site *l, unsigned int site_id){
-	/* busca y retorna el sitio que posea el id. Si no existe
-	 * returna null. No mueve el indice actual de la lista */
-
-	list_s_node *aux;
-	int exist = 0;
-
-	aux = l->first;
-	while(aux!=NULL && !exist){
-		exist = (site_get_id(aux->data) == site_id);
-		if(!exist){ aux = aux->next;}
-	}
-	if(exist){
-		return aux->data;
-	} else {
-		return NULL;
-	}
-}
-
-unsigned int list_site_size(T_list_site *l){
-	/* Retorna el largo de la lista */
-	return l->size;
-}
-
-int list_site_eol(T_list_site *l){
-	/* Retorna si el puntero actual esta al last
-	 * de la lista */
-	return (l->actual == NULL);
-}
-
-T_site *list_site_remove(T_list_site *l){
-	/* remueve de la lista el elemento apuntado por el punero actual.
- 	 * El puntero actual pasa al nodo siguiente */
-	/* EL ELEMENTO SE RETORNA. SOLO SE LO REMUEVE DE LA LISTA */
-
-	list_s_node *prio;
-	list_s_node *aux;
-	T_site *element = NULL;
-
-	if(l->actual != NULL){
-		aux = l->first;
-		prio = NULL;
-		while(aux != l->actual){
-			prio = aux;
-			aux = aux->next;
-		}
-		if(prio == NULL){
-			l->first = aux->next;
-		} else {
-			prio->next = aux->next;
-		}
-		if(aux == l->last){
-			l->last = prio;
-		}
-		l->actual = aux->next;
-		element = aux->data;
-		free(aux);
-		l->size--;
-	}
-	return element;
-}
-
-T_site *list_site_remove_id(T_list_site *l, unsigned int id){
-	/* remueve de la lista el elemento apuntado por el punero actual.
- 	 * El puntero actual pasa al nodo siguiente */
-	/* EL ELEMENTO SE RETORNA. SOLO SE LO REMUEVE DE LA LISTA */
-
-	int exist = 0;
-	list_s_node *aux;
-
-	l->actual = l->first;
-	while(!exist && l->actual != NULL){
-		if(site_get_id(l->actual->data) == id){
-			printf("list_site_remove_id: Encontramos el site a eliminar\n");
-			return list_site_remove(l);
-		}
-		l->actual = l->actual->next;
-	}
-	return NULL;
-}
-
-
-void list_site_erase(T_list_site *l){
-	/* Vacia la lista sin eliminar los elementos. */
-	list_site_first(l);
-	while(!list_site_eol(l)){
-		list_site_remove(l);
-	}
-}
-
-void list_site_print(T_list_site *l){
-	l->actual = l->first;
-	printf("PRINT SITES\n");
-	while(l->actual != NULL){
-		printf("Print Site: %s\n",site_get_name(l->actual->data));
-		l->actual = l->actual->next;
-	}
-	printf("--------------\n");
-}
-
-/*****************************
-	 Lista de Proxys
-******************************/
-
-void list_proxy_init(T_list_proxy *l){
-	l->first = NULL;
-	l->actual = NULL;
-	l->last = NULL;
-	l->size = 0;
-}
-
-void list_proxy_add(T_list_proxy *l, T_proxy *w){
-	/* Agrega un proxy al last de la lista.
-	 * El puntero actual no se modifica. Excepto que se
-	 * trate del primer elemento en ingresar a la lista */
-
-	list_p_node *new;
-	list_p_node *aux;
-
-	new = (list_p_node*)malloc(sizeof(list_p_node));
-	new->next = NULL;
-	new->data = w;
-	l->size++;
-
-	if(l->first == NULL){
-		l->first = new;
-		l->last = new;
-	} else {
-		l->last->next = new;
-		l->last = new;
-	}
-}
-
-void list_proxy_first(T_list_proxy *l){
-	/* Situa el puntero actual al inicio de la lista */
-	l->actual = l->first;
-}
-
-void list_proxy_next(T_list_proxy *l){
-	/* Avanza el puntero de actual al siguiente siempre que pueda */
-	if(l->actual != NULL){
-		l->actual = l->actual->next;
-	}
-}
-
-T_proxy *list_proxy_get(T_list_proxy *l){
-	/* Retorna el elemento donde el puntero actual se
-	 * encuentre. */
-	return l->actual->data;
-}
-
-unsigned int list_proxy_size(T_list_proxy *l){
-	/* Retorna el largo de la lista */
-	return l->size;
-}
-
-int list_proxy_eol(T_list_proxy *l){
-	/* Retorna si el puntero actual esta al last
-	 * de la lista */
-	return (l->actual == NULL);
-}
-
-void list_proxy_remove(T_list_proxy *l){
-	/* Elimina del alista el elemento apuntado por el punero actual.
- 	 * El puntero actual pasa al nodo siguiente */
-
-	list_p_node *prio;
-	list_p_node *aux;
-
-	if(l->actual != NULL){
-		aux = l->first;
-		prio = NULL;
-		while(aux != l->actual){
-			prio = aux;
-			aux = aux->next;
-		}
-		if(prio == NULL){
-			l->first = aux->next;
-		} else {
-			prio->next = aux->next;
-		}
-		if(aux == l->last){
-			l->last = prio;
-		}
-		l->actual = aux->next;
-		free(aux);
-		l->size--;
-	}
-}
-
-void list_proxy_erase(T_list_proxy *l){
-	/* Vacia la lista sin eliminar los elementos. */
-	list_proxy_first(l);
-	while(!list_proxy_eol(l)){
-		list_proxy_remove(l);
-	}
-}
-
-T_proxy *list_proxy_find_id(T_list_proxy *l, int proxy_id){
-	/* Retorna el proxy buscando por su id. Si no
-	 * existe retorna null */
-
-	list_p_node *aux;
-	int exist = 0;
-
-	aux = l->first;
-	while(aux != NULL && !exist){
-		exist = (proxy_get_id(aux->data) == proxy_id);
-		if(!exist){ aux = aux->next;}
-	}
-	if(exist){
-		return aux->data;
-	} else {
-		return NULL;
-	}
-}
-
-

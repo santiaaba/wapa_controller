@@ -8,6 +8,7 @@
 #include "structs.h"
 #include "dictionary.h"
 #include "logs.h"
+#include "lista.h"
 
 #ifndef DB_H
 #define DB_H
@@ -30,27 +31,29 @@ void db_close(T_db *db);
 int db_live(T_db *db);
 
 const char *db_error(T_db *db);
-int db_load_sites(T_db *db, T_list_site *l, char *error, int *db_fail);
+int db_load_sites(T_db *db, T_lista *l, char *error, int *db_fail);
 int db_load_site_index(T_db *db, T_site *site, char *site_id, char *error, int *db_fail);
 int db_load_site_alias(T_db *db, T_site *site, char *site_id, char *error, int *db_fail);
-int db_load_workers(T_db *db, T_list_worker *l, char *error, int *db_fail);
-int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail);
+int db_load_workers(T_db *db, T_lista *l, char *error, int *db_fail);
+int db_load_proxys(T_db *db, T_lista *l, char *error, int *db_fail);
 int db_find_site(T_db *db, char *name);
 
+/* LOGIN */
+int db_login(T_db *db, T_dictionary *d, char *error, int *db_fail);
+
 /* Para los sitios */
-int db_limit_sites(T_db *db, char *susc_id, int *db_fail);
-int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail );
+int db_limit_sites(T_db *db, char *namespace_id, int *db_fail);
+int db_get_sites_id(T_db *db, char *namespace_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail );
 int db_site_add(T_db *db, T_site **newsite, char *name,
-		unsigned int susc_id, char *dir, char *error,
-		int *db_fail);
+		unsigned int namespace_id, char *error, int *db_fail);
 
 int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fail);
-void db_site_list(T_db *db, char **data, char *susc_id);
+void db_site_list(T_db *db, char **data, char *namespace_id, int *db_fail);
 int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fail);
-uint16_t db_site_exist(T_db *db, char *susc_id, char *site_id, char *error, int *db_fail);
-void db_site_show(T_db *db, char **data, char *site_id, char *susc_id);
-int db_site_status(T_db *db, char *susc_id, char *site_id, char *status, char *error, int *db_fail);
-int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail);
+uint16_t db_site_exist(T_db *db, char *namespace_id, char *site_id, char *error, int *db_fail);
+void db_site_show(T_db *db, char **data, char *site_id, char *namespace_id);
+int db_site_status(T_db *db, char *namespace_id, char *site_id, char *status, char *error, int *db_fail);
+int db_del_all_site(T_db *db, char *namespace_id, char *error, int *db_fail);
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name,char *error, int *db_fail);
 
 /* Para los usuarios ftp */
@@ -60,10 +63,11 @@ int db_ftp_list(T_db *db, char **data, char *site_id);
 int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail);
 int db_ftp_del(T_db *db, T_dictionary *d, char *error, int *db_fail);
 
-/* Para las suscripcionse */
-int db_susc_show(T_db *db,char *susc_id,char **message,int *db_fail);
-int db_susc_add(T_db *db, T_dictionary *d, int *db_fail);
-int db_susc_del(T_db *db, char *susc_id);
+/* Para los namespaces */
+int db_namespace_list(T_db *db,char **message,int *db_fail);
+int db_namespace_show(T_db *db,char *namespace_id,char **message,int *db_fail);
+int db_namespace_add(T_db *db, T_dictionary *d, int *db_fail);
+int db_namespace_del(T_db *db, char *namespace_id);
 
 
 /* Para los servers en general */

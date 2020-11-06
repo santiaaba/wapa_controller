@@ -4,6 +4,18 @@
  * 	Funciones varias	*
  ********************************/
 
+void random_sitedir(char *name){
+	/* *name debe ser un array de 20 elementos */
+	char *string = "0123456789abcdefghijklmnopqrstuvwxyz";
+	int j,i;
+
+	for(j=0;j<19;j++){
+		i = rand() % 36;
+		name[j] = string[i];
+	}
+	name[19]='\0';
+}
+
 void random_dir(char *dir){
 	/* Genera un dir y sub dir de dos digitos cada uno */
 	char *string = "0123456789";
@@ -27,7 +39,7 @@ int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir,
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
-	sprintf(query,"select name,hash_dir from web_site s inner join web_suscription u on (s.susc_id = u.id) where s.id=%s", site_id);
+	sprintf(query,"select name,hash_dir from web_site s inner join web_namespace u on (s.namespace_id = u.id) where s.id=%s", site_id);
 	printf("%s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_get_hash_dir",query);
 	if(mysql_query(db->con,query)){
@@ -123,14 +135,14 @@ int db_find_site(T_db *db, char *name){
 	}
 }
 
-uint16_t  db_site_exist(T_db *db, char *susc_id, char *site_id, char *error, int *db_fail){
+uint16_t  db_site_exist(T_db *db, char *namespace_id, char *site_id, char *error, int *db_fail){
 	/* Si el sitio existe retorna su version. Si retorna 0 es porque
  	   no existe */
 	char query[200];
 	int resultado;
 	MYSQL_RES *result;
 
-	sprintf(query,"select id from web_site where id=%s and susc_id=%s", site_id,susc_id);
+	sprintf(query,"select id from web_site where id=%s and namespace_id=%s", site_id,namespace_id);
 	mysql_query(db->con,query);
 	result = mysql_store_result(db->con);
 	if(!result){
@@ -167,12 +179,12 @@ int db_load_site_index(T_db *db, T_site *site, char *site_id, char *error, int *
 		db_fail = 0;
 	}
 
-	list_s_e_clean(site_get_indexes(site));
+	lista_clean(site_get_indexes(site),s_e_free);
 	result = mysql_store_result(db->con);
 	while ((row = mysql_fetch_row(result))){
 		new_index = (T_s_e*)malloc(sizeof(T_s_e));
 		s_e_init(new_index,atoi(row[0]),row[1]);
-		list_s_e_add(site_get_indexes(site),new_index);
+		lista_add(site_get_indexes(site),new_index);
 	}
 	return 1;
 }
@@ -194,23 +206,24 @@ int db_load_site_alias(T_db *db, T_site *site, char *site_id, char *error, int *
 	}
 
 	db_fail = 0;
-	list_s_e_clean(site_get_alias(site));
+	lista_clean(site_get_alias(site),s_e_free);
 	result = mysql_store_result(db->con);
 	while ((row = mysql_fetch_row(result))){
 		new_alias = (T_s_e*)malloc(sizeof(T_s_e));
 		s_e_init(new_alias,atoi(row[0]),row[1]);
-		list_s_e_add(site_get_alias(site),new_alias);
+		lista_add(site_get_alias(site),new_alias);
 	}
 	return 1;
 }
 
-int db_load_sites(T_db *db, T_list_site *l, char *error, int *db_fail){
+int db_load_sites(T_db *db, T_lista *l, char *error, int *db_fail){
 	char query[200];
 	MYSQL_ROW row, row_alias;
 	T_site *new_site;
 	T_s_e *new_alias;
 
-	strcpy(query,"select s.id,name,hash_dir,version,size from web_site s inner join web_suscription p on (s.susc_id = p.id)");
+	strcpy(query,"select s.id,s.name,hash_dir,version,size from web_site s \
+			 	  inner join web_namespace p on (s.namespace_id = p.id)");
 	logs_write(db->logs,L_DEBUG,"db_load_sites", query);
 
 	if(mysql_query(db->con,query)){
@@ -231,13 +244,13 @@ int db_load_sites(T_db *db, T_list_site *l, char *error, int *db_fail){
 		if(!db_load_site_index(db,new_site,row[0],error,db_fail))
 			return 0;
 		/* Alta del sitio en la lista */
-		list_site_add(l,new_site);
+		lista_add(l,new_site);
 	}
 	printf("Terminamos load sites\n");
 	return 1;
 }
 
-int db_load_workers(T_db *db, T_list_worker *l, char *error, int *db_fail){
+int db_load_workers(T_db *db, T_lista *l, char *error, int *db_fail){
 	char query[200];
 	MYSQL_ROW row;
 	T_worker *new_worker;
@@ -254,16 +267,17 @@ int db_load_workers(T_db *db, T_list_worker *l, char *error, int *db_fail){
 	}
 	*db_fail = 0;
 	MYSQL_RES *result = mysql_store_result(db->con);
+	printf("Paso\n");
 	while ((row = mysql_fetch_row(result))){
 		new_worker = (T_worker*)malloc(sizeof(T_worker));
 		worker_init(new_worker,atoi(row[0]),row[1],row[2],atoi(row[3]));
-		list_worker_add(l,new_worker);
+		lista_add(l,new_worker);
 	}
 	printf("Terminamos load workers\n");
 	return 1;
 }
 
-int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail){
+int db_load_proxys(T_db *db, T_lista *l, char *error, int *db_fail){
 	char query[200];
 	MYSQL_ROW row;
 	T_proxy *new_proxy;
@@ -282,107 +296,141 @@ int db_load_proxys(T_db *db, T_list_proxy *l, char *error, int *db_fail){
 		printf("Cargando Proxy %s\n",row[1]);
 		new_proxy = (T_proxy*)malloc(sizeof(T_proxy));
 		proxy_init(new_proxy,atoi(row[0]),row[1],row[2],atoi(row[3]));
-		list_proxy_add(l,new_proxy);
+		lista_add(l,new_proxy);
 	}
 	return 1;
 }
 
-/****	Funciones para suscripciones	****/
-
-int db_susc_show(T_db *db,char *susc_id,char **message,int *db_fail){
-	/* Retorna en formato json los datos de una suscripcion */
+/****	Funciones para namespace	****/
+int db_namespace_list(T_db *db, char **message, int *db_fail){
 	char query[200];
 	char aux[200];
 	MYSQL_ROW row;
 	MYSQL_RES *result;
 
-	sprintf(query,"select * from web_suscription where id=%s",susc_id);
+	sprintf(query,"select * from web_namespace");
+	printf("DB_NAMESPACE_LIST: %s\n",query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_susc_show","DB_ERROR");
+		printf("FALLO estamos\n");
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
+	printf("ACA estamos\n");
+	result = mysql_store_result(db->con);
+	json_mysql_result(result,message);
+	printf("Resultado:-%s-\n",*message);
+}
+
+int db_namespace_show(T_db *db,char *namespace_id,char **message,int *db_fail){
+	/* Retorna en formato json los datos de un namespace */
+	char query[200];
+	char aux[200];
+	MYSQL_FIELD *field;
+	int fields = 0;
+	char *col_names[100];
+	MYSQL_ROW row;
+	MYSQL_RES *result;
+
+	sprintf(query,"select * from web_namespace where id=%s",namespace_id);
+	if(mysql_query(db->con,query)){
+		logs_write(db->logs,L_ERROR,"db_namespace_show","DB_ERROR");
 		*db_fail = 1;
 		return 0;
 	}
 	*db_fail = 0;
 	result = mysql_store_result(db->con);
-	strcpy(aux,"200|\"cloud\":\"Hosting web\",\"data\":\"Nada de momento\"}");
-	printf("DB_SUSC_SHOW: %s\n",aux);
-	*message=(char *)realloc(*message,strlen(aux)+1);
-	strcpy(*message,aux);
-	return 1;
-	
+
+	while(field = mysql_fetch_field(result)){
+		col_names[fields] = field->name;
+		fields++;
+	}
+
+	if((mysql_num_rows(result) == 1)){
+		row = mysql_fetch_row(result);
+		json_mysql_result_row(row,col_names,fields,message);
+		return 1;
+	} else {
+		dim_copy(message,"namespace no existe");
+		return 0;
+	}
 }
 
-int db_susc_add(T_db *db, T_dictionary *d, int *db_fail){
+int db_namespace_add(T_db *db, T_dictionary *d, int *db_fail){
 	char query[200];
 	char hash_dir[6];
-	char *susc_id;
+	unsigned int namespace_id;
 
-	/* Generamos la entrada en web_suscription */
+	printf("db_namespace_add\n");
+	printf("-----------------\n");
+	dictionary_print(d);
+	printf("-----------------\n");
+	/* Generamos la entrada en namespace */
 	random_dir(hash_dir);
-	susc_id = dictionary_get(d,"susc_id");
-	sprintf(query,"insert into web_suscription values (%s,'%s',%s)",
-		susc_id,hash_dir,dictionary_get(d,"web_sites"));
+	sprintf(query,"insert into web_namespace(name,hash_dir) values ('%s','%s')",
+			dictionary_get(d,"name"),hash_dir);
+
 	printf("sql %s\n",query);
-	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
+	logs_write(db->logs,L_DEBUG,"db_namespace_add", query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_susc_add","DB_ERROR");
+		logs_write(db->logs,L_ERROR,"db_namespace_add","DB_ERROR");
 		*db_fail = 1;
 		return 0;
 	}
+	namespace_id = mysql_insert_id(db->con);
 
 	/* Generamos la entrada para las tablas del servicio ftp */
-	sprintf(query,"insert into ftpgroup(groupname,gid) values ('g_%s',%s)",susc_id,susc_id);
+	sprintf(query,"insert into ftpgroup(groupname,gid) values ('g_%u',%u)",namespace_id,namespace_id);
 	printf("sql %s\n",query);
-	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
+	logs_write(db->logs,L_DEBUG,"db_namespace_add", query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_susc_add","DB_ERROR");
+		logs_write(db->logs,L_ERROR,"db_namespace_add","DB_ERROR");
 		*db_fail = 1;
 		return 0;
 	}
-	sprintf(query,"insert into ftpquotalimits(name,quota_type,limit_type,bytes_xfer_avail) values ('g_%s','group','hard',%s)",
-		susc_id,dictionary_get(d,"web_quota"));
+	sprintf(query,"insert into ftpquotalimits(name,quota_type,limit_type,bytes_xfer_avail) values ('g_%u','group','hard',%u)",
+		namespace_id,dictionary_get(d,"web_quota"));
 	printf("sql %s\n",query);
-	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
+	logs_write(db->logs,L_DEBUG,"db_namespace_add", query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_susc_add","DB_ERROR");
+		logs_write(db->logs,L_ERROR,"db_namespace_add","DB_ERROR");
 		*db_fail = 1;
 		return 0;
 	}
-	sprintf(query,"insert into ftpquotatallies(name,quota_type) values ('g_%s','group')",susc_id);
+	sprintf(query,"insert into ftpquotatallies(name,quota_type) values ('g_%u','group')",namespace_id);
 	printf("sql %s\n",query);
-	logs_write(db->logs,L_DEBUG,"db_susc_add", query);
+	logs_write(db->logs,L_DEBUG,"db_namespace_add", query);
 	if(mysql_query(db->con,query)){
-		logs_write(db->logs,L_ERROR,"db_susc_add","DB_ERROR");
+		logs_write(db->logs,L_ERROR,"db_namespace_add","DB_ERROR");
 		*db_fail = 1;
 		return 0;
 	}
-
 
 	*db_fail = 0;
 	return 1;
 }
 
-int db_susc_del(T_db *db, char *susc_id){
-	/* Elimina una suscripcion. Previamente se deberia eliminar
+int db_namespace_del(T_db *db, char *namespace_id){
+	/* Elimina un namespace. Previamente se deberia eliminar
 	   los sitios de la misma. Si falla retorna 0 y se considera
 	   una falla en la base de datos. Sino retorna 1 */
 	char query[200];
-	sprintf(query,"delete from web_suscription where id=%s",susc_id);
+	sprintf(query,"delete from web_namespace where id=%s",namespace_id);
 	printf("query:%s\n",query);
 	if(mysql_query(db->con,query)){
 		return 0;
 	}
-	sprintf(query,"delete from ftpgroup where groupname='g_%s'",susc_id);
+	sprintf(query,"delete from ftpgroup where groupname='g_%s'",namespace_id);
 	printf("query:%s\n",query);
 	if(mysql_query(db->con,query)){
 		return 0;
 	}
-	sprintf(query,"delete from ftpquotalimits where name='g_%s'",susc_id);
+	sprintf(query,"delete from ftpquotalimits where name='g_%s'",namespace_id);
 	printf("query:%s\n",query);
 	if(mysql_query(db->con,query)){
 		return 0;
 	}
-	sprintf(query,"delete from ftpquotatallies where name='g_%s'",susc_id);
+	sprintf(query,"delete from ftpquotatallies where name='g_%s'",namespace_id);
 	printf("query:%s\n",query);
 	if(mysql_query(db->con,query)){
 		return 0;
@@ -393,15 +441,15 @@ int db_susc_del(T_db *db, char *susc_id){
 
 /****	Funciones para sitios	****/
 
-int db_limit_sites(T_db *db, char *susc_id, int *db_fail){
+int db_limit_sites(T_db *db, char *namespace_id, int *db_fail){
 	/* retorna 0 si se supera el limite de
-	 * sitios de la suscripcion o falla la base de datos*/
+	 * sitios del namespace o falla la base de datos*/
 	char query[300];
 	MYSQL_RES *result;
         MYSQL_ROW row;
 
 	printf("Entro\n");
-	sprintf(query,"select (select sites_limit from web_suscription where id=%s) - (select count(id) from web_site where susc_id=%s)",susc_id,susc_id);
+	sprintf(query,"select (select sites_limit from web_namespace where id=%s) - (select count(id) from web_site where namespace_id=%s)",namespace_id,namespace_id);
 	printf(query);
 	printf("PASO\n");
 	if(mysql_query(db->con,query)){
@@ -423,12 +471,12 @@ int db_limit_sites(T_db *db, char *susc_id, int *db_fail){
 	return atoi(row[0]);
 }
 
-int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
-		char *dir, char *error, int *db_fail){
+int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int namespace_id,
+				char *error, int *db_fail){
 	/* Agrega un sitio a la base de datos.
  	 * Si no pudo hacerlo retorna 0 sino 1
 	 * En el parametro dir retorna el directorio
-	 * obtenido de la suscripcion que le corresponde */
+	 * obtenido del namespace que le corresponde */
 	char index[6][15] = {
 				"default.html",
 				"index.htm",
@@ -444,40 +492,45 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
 	unsigned int index_id;
 	T_s_e *newindex;
 	int i;
+	char hash_dir[20];	/* directorio del sitio */
+	char newdir[30];	/* El directorio del namespace + directorio del sitio */
 
-	sprintf(query,"insert into web_site(version,name,size,susc_id) values(1,\"%s\",1,%lu)",
-		name,susc_id,dir);
+	random_sitedir(hash_dir);
+
+	sprintf(query,"insert into web_site(version,name,size,namespace_id,dir) values(1,\"%s\",1,%lu,\"%s\")",
+		name,namespace_id,hash_dir);
 	logs_write(db->logs,L_DEBUG,"db_site_add", query);
+	printf("sql: %s\n", query);
 
 	if(mysql_query(db->con,query)){
 		printf("DB_SITE_ADD errno: %i\n",mysql_errno(db->con));
 		if(mysql_errno(db->con) == 1062){
-			logs_write(db->logs,L_ERROR,"db_site_add", "DB_ERROR");
 			*db_fail =0;
 			logs_write(db->logs,L_ERROR,"db_site_add","Sitio con nombre repetido");
-			strcpy(error,"300|\"code\":\"301\",\"info\":\"Ya existe sitio con ese nombre\"");
+			strcpy(error,"Ya existe sitio con ese nombre");
 		} else {
 			*db_fail =1;
 			logs_write(db->logs,L_ERROR,"db_site_add","DB_ERROR");
 		}
-		printf("Pasamos\n");
 		return 0;
 	} else {
 		site_id = mysql_insert_id(db->con);
 
 		/*Obtenemos el directorio */
-		sprintf(query,"select hash_dir from web_suscription where id=%i",susc_id);
+		sprintf(query,"select hash_dir from web_namespace where id=%i",namespace_id);
 		printf("query: %s\n",query);
 		if(mysql_query(db->con,query)){
 			logs_write(db->logs,L_ERROR,"db_site_add", "DB_ERROR");
+			/* Va a quedar inconsistente porque pude agregar la entrada en la tabla del sitio
+			 * pero a causa de este error no pude generar las otras en las demas tablas */
 			*db_fail =1;
 			return 0;
 		}
 		result = mysql_store_result(db->con);
 		row = mysql_fetch_row(result);
+		sprintf(newdir,"%s/%s",row[0],hash_dir);
 		(*newsite) = (T_site *)malloc(sizeof(T_site));
-		site_init(*newsite,name,site_id,row[0],1,1);
-		strcpy(dir,row[0]);
+		site_init(*newsite,name,site_id,newdir,1,1);
 
 		/* Poblamos los indices */
 		for(i=5;i>=0;i--){
@@ -491,7 +544,7 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int susc_id,
 			index_id = mysql_insert_id(db->con);
 			newindex = (T_s_e *)malloc(sizeof(T_s_e));
 			s_e_init(newindex,index_id,index[i]);
-			list_s_e_add(site_get_alias(*newsite),newindex);
+			lista_add(site_get_alias(*newsite),newindex);
 		}
 		*db_fail =0;
 		return 1;
@@ -621,11 +674,11 @@ int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fa
 	return 1;
 }
 
-int db_site_status(T_db *db, char *susc_id, char *site_id, char *status, char *error, int *db_fail){
+int db_site_status(T_db *db, char *namespace_id, char *site_id, char *status, char *error, int *db_fail){
 	/* Modifica el estado de un sitio */
 	char query[200];
 
-	if(!db_site_exist(db,susc_id,site_id,error,db_fail))
+	if(!db_site_exist(db,namespace_id,site_id,error,db_fail))
 		return 0;
 	sprintf(query,"update web_site set status=%c where user_id=%s", status,site_id);
 	if(mysql_query(db->con,query)){
@@ -637,15 +690,15 @@ int db_site_status(T_db *db, char *susc_id, char *site_id, char *status, char *e
 	return 1;
 }
 
-int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail ){
+int db_get_sites_id(T_db *db, char *namespace_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail ){
 	/* Retorna en la variable site_ids la cual es en array de int, el listado
- 	 * de ids de sitios de la suscripcion */
+ 	 * de ids de sitios del namespace */
 	char query[200];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	int i=0;
 	
-	sprintf(query,"select id from web_site where susc_id=%s",susc_id);
+	sprintf(query,"select id from web_site where namespace_id=%s",namespace_id);
 	printf("QEURY : %s\n",query);
 	if(mysql_query(db->con,query)){
 		*db_fail = 1;
@@ -663,9 +716,9 @@ int db_get_sites_id(T_db *db, char *susc_id, int site_ids[256], int *site_ids_le
 	return 1;
 }
 
-void db_site_list(T_db *db, char **data, char *susc_id){
+void db_site_list(T_db *db, char **data, char *namespace_id, int *db_fail){
 	/* Retorna en formato json la lista de sitios dado el id de
- 	 * una suscripcion pasado por parametro. Si susc_id="A" entonces lista todo */
+ 	 * un namespace pasado por parametro. Si namespace_id="A" entonces lista todo */
 
 	int size=300; //Los datos de un solo sitio no deben superar este valor
 	char query[200];
@@ -674,10 +727,10 @@ void db_site_list(T_db *db, char **data, char *susc_id){
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
-	if(susc_id[0] == 'A')
+	if(namespace_id[0] == 'A')
 		sprintf(query,"select id,name,status from web_site");
 	else
-		sprintf(query,"select id,name,status from web_site where susc_id =%s",susc_id);
+		sprintf(query,"select id,name,status from web_site where namespace_id =%s",namespace_id);
 	printf("DB_SITE_LIST: %s\n",query);
 	mysql_query(db->con,query);
 	result = mysql_store_result(db->con);
@@ -705,7 +758,7 @@ void db_site_list(T_db *db, char **data, char *susc_id){
 	printf("Resultado:-%s-\n",*data);
 }
 
-void db_site_show(T_db *db, char **data, char *site_id, char *susc_id){
+void db_site_show(T_db *db, char **data, char *site_id, char *namespace_id){
 	/* Retorna en formato json los datos de un sitio dado
  	 * en base al id pasado por parametro */
 
@@ -715,7 +768,7 @@ void db_site_show(T_db *db, char **data, char *site_id, char *susc_id){
 	MYSQL_ROW row;
 	int real_size;
 
-	sprintf(query,"select * from web_site where id =%s and susc_id=%s",site_id,susc_id);
+	sprintf(query,"select * from web_site where id =%s and namespace_id=%s",site_id,namespace_id);
 	printf("DB_SITE_LIST: %s\n",query);
 	mysql_query(db->con,query);
 	if(result = mysql_store_result(db->con)){
@@ -724,7 +777,7 @@ void db_site_show(T_db *db, char **data, char *site_id, char *susc_id){
 			real_size = 500;
 			*data=(char *)realloc(*data,real_size);
 			printf("colocamos info\n");
-			sprintf(*data,"200|{\"id\":\"%s\",\"version\":\"%s\",\"name\":\"%s\",\"size\":\"%s\",\"susc_id\":\"%s\",\"status\":\"%s\",\"urls\":[",
+			sprintf(*data,"200|{\"id\":\"%s\",\"version\":\"%s\",\"name\":\"%s\",\"size\":\"%s\",\"namespace_id\":\"%s\",\"status\":\"%s\",\"urls\":[",
 				row[0],row[1],row[2],row[3],row[4],row[5]);
 	
 			/* Listado de alias */
@@ -773,7 +826,7 @@ int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fai
 		*db_fail=1;
 		return 0;
 	}
-	/* Liberamos de la quota de la suscripcion lo que ocupaba el sitio*/
+	/* Liberamos de la quota del namespace lo que ocupaba el sitio*/
 	sprintf(query,"update ftpquotatallies set bytes_xfer_used = bytes_xfer_used - %i",size);
 	logs_write(db->logs,L_DEBUG,"db_site_del", query);
 	if(mysql_query(db->con,query)){
@@ -811,14 +864,14 @@ int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fai
 	return 1;
 }
 
-int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail){
-	/* Elimina todos los sitios de una suscripcion
+int db_del_all_site(T_db *db, char *namespace_id, char *error, int *db_fail){
+	/* Elimina todos los sitios de un namespace
  	 *  dado el id de la misma */
 	char query[200];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
-	sprintf(query,"select id from web_site where susc_id=%s",susc_id);
+	sprintf(query,"select id from web_site where namespace_id=%s",namespace_id);
 	if(mysql_query(db->con,query)){
 		*db_fail = 1;
 		return 0;
@@ -829,9 +882,9 @@ int db_del_all_site(T_db *db, char *susc_id, char *error, int *db_fail){
 				return 0;
 		}
 
-		/* Eliminamos la cuota utilizada de la suscripcion */
+		/* Eliminamos la cuota utilizada del namespace */
 		sprintf(query,"update ftpquotatallies set bytes_xfer_used=0 where name='g_%s'",
-			susc_id);
+			namespace_id);
 		if(mysql_query(db->con,query)){
 			*db_fail = 1;
 			return 0;
@@ -848,7 +901,7 @@ int db_limit_ftp_users(T_db *db, char *site_id, int *db_fail){
 	MYSQL_RES *result;
         MYSQL_ROW row;
 
-	sprintf(query,"select (select s.ftp_per_site_limit from web_suscription s inner join web_site w on (s.id = w.susc_id) where w.id=%s) - (select count(id) from ftpuser where site_id=%s)",site_id,site_id);
+	sprintf(query,"select (select s.ftp_per_site_limit from web_namespace s inner join web_site w on (s.id = w.namespace_id) where w.id=%s) - (select count(id) from ftpuser where site_id=%s)",site_id,site_id);
 	if(mysql_query(db->con,query)){
 		*db_fail = 1;
 		return 0;
@@ -870,12 +923,12 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 	char homedir[200];
 	MYSQL_RES *result;
 	MYSQL_ROW row_site;
-	MYSQL_ROW row_susc;
+	MYSQL_ROW row_namespace;
 
-	/*Obtenemos mediante el site_id el nombre del sitio y el susc_id */
+	/*Obtenemos mediante el site_id el nombre del sitio y el namespace_id */
 	printf("DB_ftp_add\n");
 	*db_fail=0;
-	sprintf(query,"select name, susc_id from web_site where id=%s", dictionary_get(d,"site_id"));
+	sprintf(query,"select name, namespace_id from web_site where id=%s", dictionary_get(d,"site_id"));
 	if(mysql_query(db->con,query)){
 		printf("DB_SITE_ADD errno: %i\n",mysql_errno(db->con));
 		*db_fail=1;
@@ -890,7 +943,7 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 	row_site = mysql_fetch_row(result);
 
 	/* Obtenemos el hash_dir */
-	sprintf(query,"select hash_dir from web_suscription where id=%s",row_site[1]);
+	sprintf(query,"select hash_dir from web_namespace where id=%s",row_site[1]);
 	if(mysql_query(db->con,query)){
 		logs_write(db->logs,L_ERROR,"db_ftp_add","DB_ERROR");
 		*db_fail=1;
@@ -901,10 +954,10 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 		strcpy(error,"300|\"code\":\"301\",\"info\":\"ERROR Fatal. Sitio uerfano\"");
 		return 0;
 	}
-	row_susc = mysql_fetch_row(result);
+	row_namespace = mysql_fetch_row(result);
 	
 	/* Armamos el homedir */
-	sprintf(homedir,"%s/%s/%s",config_webdir(c),row_susc[0],row_site[0]);
+	sprintf(homedir,"%s/%s/%s",config_webdir(c),row_namespace[0],row_site[0]);
 	printf("homedir armado: %s\n",homedir);
 
 	sprintf(query,"insert into ftpuser(userid,passwd,uid,gid,homedir,site_id) values('%s/%s','%s',%s,%s,'%s',%s)",
@@ -1047,6 +1100,26 @@ int db_worker_get_info(T_db *db, int id, char *data){
 		sprintf(data,"\"status\":\"%s\",\"size\":%s,",status,row[1]);
 	}
 	return 1;
+}
+
+int db_login(T_db *db, T_dictionary *d, char *error, int *db_fail){
+    MYSQL_ROW row;
+    char sql[200];
+
+    sprintf(sql,"select count(*) as cantidad from user where name=\"%s\" and pass=\"%s\"",
+				dictionary_get(d,"user"),dictionary_get(d,"pass"));
+    if(mysql_query(db->con,sql)){
+                *db_fail = 1;
+                return 0;
+        }
+    *db_fail = 0;
+    MYSQL_RES *result = mysql_store_result(db->con);
+    if((mysql_num_rows(result) == 1)){
+        return 1;
+    } else {
+        sprintf(error,"{\"code\":\"350\",\"info\":\"Eror Login\"}");
+        return 0;
+    }
 }
 
 int db_proxy_get_info(T_db *db, int id, char *data){
