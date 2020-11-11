@@ -204,19 +204,52 @@ int task_login(T_task *t, T_db *db){
     task_done(t,HTTP_200,message);
 }
 
-void task_site_list(T_task *t, T_db *db, T_logs *logs){
+void task_site_list(T_task *t, T_lista *sitios, T_db *db, T_logs *logs){
 	/* Lista sitios de un namespace dado */
 	char *namespace_id;
 	char *message=NULL;
+	int *siteID;
 	int db_fail;
+	T_site *site;
+	T_lista *idSites;
+	T_lista *sitiosAReportar;
+
+	idSites = (T_lista*)malloc(sizeof(T_lista));
+	sitiosAReportar = (T_lista*)malloc(sizeof(T_lista));
+
+	lista_init(idSites,sizeof(uint32_t));
+	lista_init(sitiosAReportar,sizeof(T_site));
 
 	printf("Santiagooooo task_site_list\n");
 	namespace_id = dictionary_get(t->data,"namespace_id");
-	db_site_list(db,&message,namespace_id,&db_fail);
+	/* Obtenemos de la base de datos los id de sitios pertenecientes
+	   al namespace dado */
+	db_site_list(db,idSites,namespace_id,&db_fail);
 	if(db_fail)
         task_done(t,HTTP_501,M_DB_ERROR);
-    else
-        task_done(t,HTTP_200,message);
+    else {
+	/* Obtenidos el listado de ids, ahora buscamos los sitios
+ 	 * en las estructuras */
+		lista_first(idSites);
+		printf("ACA estamos\n");
+		while(!lista_eol(idSites)){
+			printf("ACA estamos 1\n");
+			siteID = lista_get(idSites);
+			printf("ACA estamos 2\n");
+			printf("Buscando SiteID: %i\n",*siteID);
+			site = lista_find(sitios, site_get_id, *siteID);
+			if(!site){
+				printf("ERRROR: Sitio con id %i no esta en estructuras pero si en la db\n",*siteID);
+			} else {
+				printf("Encontramos sitio: %s\n", site->name);
+				lista_add(sitiosAReportar,site);
+			}
+			lista_next(idSites);
+		}
+		/* Tomamos la lista y la convertimos a Json */
+		lista_to_json(sitiosAReportar,&message,site_to_json);
+		task_done(t,HTTP_200,message);
+	}
 }
 
 T_task_status task_get_status(T_task *t){
@@ -226,11 +259,16 @@ T_task_status task_get_status(T_task *t){
 void task_site_show(T_task *t, T_db *db, T_logs *logs){
 	char *site_id;
 	char *namespace_id;
-	T_site *site;
+	char *message = NULL;
+	int db_fail;
 
 	site_id = dictionary_get(t->data,"site_id");
 	namespace_id = dictionary_get(t->data,"namespace_id");
-	db_site_show(db,&(t->result),site_id,namespace_id);
+	db_site_show(db,&message,site_id,namespace_id,&db_fail);
+	if(db_fail)
+        task_done(t,HTTP_501,M_DB_ERROR);
+    else
+        task_done(t,HTTP_200,message);
 }
 
 int task_site_add(T_task *t, T_lista *l, T_db *db, T_config *config, T_logs *logs){
@@ -313,7 +351,7 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 	uint32_t size;
 	char ftp_id[50];
 	int ftp_ids[256];	//Maxima cantidad de ftp users por sitio
-	int ftp_ids_len;	//cantoidad de usuarios ftp
+	int ftp_ids_len;	//cantidad de usuarios ftp
 	int ok;
 	T_site *site = NULL;
 	T_worker *worker;
@@ -321,6 +359,22 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 	T_dictionary *data_aux=NULL;
 
 	site_id = dictionary_get(t->data,"site_id");
+	
+	/* Obtenemos el sitio a eliminar */
+	site = lista_find(l,site_get_id,atoi(site_id));
+	if(site == NULL){
+		printf("sitio no existe en las estructuras del controlador\n");
+		task_done(t,HTTP_404,"Sitio no existe");
+		return;
+	}
+	/* Lo quitamos de las estructuras y del cluster */
+	lista_first(site_get_workers(site));
+	while(!lista_eol(site_get_workers(site))){
+		worker = lista_get(site_get_workers(site));
+		worker_remove_site(worker,site);
+		lista_next(site_get_workers(site));
+	}
+	printf("Quitamos de los apaches y listas\n");
 
 	/* Eliminamos las cuentas FTP */
 	task_aux = (T_task *)malloc(sizeof(T_task));
@@ -351,43 +405,16 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 		return 0;
 	}
 
-	if(!db_get_hash_dir(db,site_id,hash_dir,site_name,error,&db_fail)){
-		if(db_fail){
-			task_done(t,HTTP_501,M_DB_ERROR);
-		} else {
-			task_done(t,HTTP_499,error);
-		}
-		return 0;
-	}
-
-	printf("Tenemos el hash\n");
 	/* Borramos de la base de datos el sitio, indices, alias,
  	   usuarios ftp y recuperamos espacio en disco */
-	sprintf(command,"du -bs /%s/%s/%s",config_webdir(c),hash_dir,site_name);
-	SYSTEM_DO
 	if(!db_site_del(db,site_id,size,error,&db_fail)){
 		task_done(t,HTTP_500,"Error indefinido");
 		return 0;
 	}
 	printf("Tenemos entradas en la DB\n");
 
-	/* Lo borramos logicamente y quitamos del apache */
-	site = lista_find(l,site_get_id,atoi(site_id));
-	if(site){
-		/* Siempre deberiamos entrar por true. Pero...
- 		 * si hay algún error donde site = NULL debemos tener
- 		 * cuidado */
-		lista_first(site_get_workers(site));
-		while(!lista_eol(site_get_workers(site))){
-			worker = lista_get(site_get_workers(site));
-			worker_remove_site(worker,site);
-			lista_next(site_get_workers(site));
-		}
-	}
-	printf("Quitamos de los apaches y listas\n");
-
 	/* Lo borramos fisicamente de la estructura de directorios */
-	sprintf(command,"rm -rf /websites/%s/%s",hash_dir,site_name);
+	sprintf(command,"rm -rf %s/%s",config_webdir(c),site->dir);
 	SYSTEM_DO
 
 	printf("Borramos del directorio\n");
@@ -396,6 +423,93 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 	logs_write(logs,L_INFO,"task_site_del","Sitio borrado");
 	return 1;
 }
+
+int task_site_stop(T_task *t, T_lista *l, T_db *db, T_logs *logs){
+	/* Coloca un sitio offline */
+	char error[200];
+	int db_fail;
+	T_site *site;
+
+	if(!db_site_status(db,dictionary_get(t->data,"namespace_id"),
+	   dictionary_get(t->data,"site_id"),
+	   dictionary_get(t->data,"status"),error,&db_fail)){
+		if(db_fail)
+			task_done(t,HTTP_501,M_DB_ERROR);
+		else
+			task_done(t,HTTP_499,error);
+		return 0;
+	}
+	/* Ya cambiado en la base de datos... procedemos */
+	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
+	site_stop(site);
+	return 1;
+}
+
+int task_site_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
+	/* Coloca un sitio online */
+	char error[200];
+	int db_fail;
+	T_site *site;
+
+	if(!db_site_status(db,dictionary_get(t->data,"namespace_id"),
+	   dictionary_get(t->data,"site_id"),
+	   dictionary_get(t->data,"status"),error,&db_fail)){
+		if(db_fail)
+			task_done(t,HTTP_501,M_DB_ERROR);
+		else
+			task_done(t,HTTP_499,error);
+		return 0;
+	}
+	/* Ya cambiado en la base de datos... procedemos */
+	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
+	site_start(site);
+	return 1;
+}
+
+void task_site_mod(T_task *t, T_lista *l, T_db *db, T_logs *logs){
+	/* Modifica un sitio */
+
+	T_site *site;
+	int db_fail;
+	uint16_t version;
+	char error[200];
+	char aux[40];
+
+	/* Verificamos que el sitio corresponda al suscriber_id */
+	version = db_site_exist(db,dictionary_get(t->data,"namespace_id"),
+		dictionary_get(t->data,"site_id"),error,&db_fail);
+	if(!version){
+		if(db_fail){
+			task_done(t,HTTP_501,M_DB_ERROR);
+		} else {
+			task_done(t,HTTP_404,"Sitio no existe\"");
+		}
+		return;
+	}
+	/* Verificamos que el sitio exista en las estructuras */
+	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
+	if(!site){
+		task_done(t,HTTP_500,"Error fatal a analizar: task_site_mod");
+		return;
+	}
+
+	sprintf(aux,"%lu",version);
+	dictionary_add(t->data,"version",aux);
+	/* modificamos el sitio en la base de datos */
+	if(!db_site_mod(db,site,t->data,error,&db_fail)){
+		if(db_fail)
+			task_done(t,HTTP_501,M_DB_ERROR);
+		else{
+			task_done(t,HTTP_499,error);
+		}
+	}
+	task_done(t,HTTP_200,"Sitio modificado");
+}
+
+
+/****************************************
+ * 				Namespace TASKS			*
+ ****************************************/
 
 void task_namespace_list(T_task *t, T_db *db, T_logs *logs){
 	/* Lista todos los namespaces */
@@ -486,7 +600,7 @@ void task_namespace_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *lo
 		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_del:2");
 }
 
-void task_namespace_stop(T_task *t, T_lista *l, T_db *db){
+void task_namespace_stop(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 	/* Detiene todos los sitios de una suscripcion */
 	int site_ids[256];	//256 es la maxima cantidad de sitios por suscripcion
 	int site_ids_len = 0;	//Cantidad de elementos del array site_ids
@@ -510,7 +624,7 @@ void task_namespace_stop(T_task *t, T_lista *l, T_db *db){
 			while((site_ids_len > 0) && ok){
 				sprintf(site_id,"%i",site_ids[site_ids_len-1]);
 				dictionary_add(task_aux->data,"site_id",site_id);
-				ok &= task_site_stop(task_aux,l,db);
+				ok &= task_site_stop(task_aux,l,db,logs);
 				dictionary_remove(task_aux->data,"site_id");
 				site_ids_len--;
 			}
@@ -524,7 +638,7 @@ void task_namespace_stop(T_task *t, T_lista *l, T_db *db){
 		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_stop:2");
 }
 	
-void task_namespace_start(T_task *t, T_lista *l, T_db *db){
+void task_namespace_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 	/* ARRANCA todos los sitios de una suscripcion */
 	T_task *task_aux;
 	int site_ids[256];	//256 es la maxima cantidad de sitios por suscripcion
@@ -548,7 +662,7 @@ void task_namespace_start(T_task *t, T_lista *l, T_db *db){
 			while((site_ids_len > 0) && ok){
 				sprintf(site_id,"%i",site_ids[site_ids_len-1]);
 				dictionary_add(task_aux->data,"site_id",site_id);
-				ok &= task_site_start(task_aux,l,db);
+				ok &= task_site_start(task_aux,l,db,logs);
 				dictionary_remove(task_aux->data,"site_id");
 			}
 		}
@@ -559,88 +673,6 @@ void task_namespace_start(T_task *t, T_lista *l, T_db *db){
 			task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_start:1");
 	} else
 		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_start:2");
-}
-
-int task_site_stop(T_task *t, T_lista *l, T_db *db, T_logs *logs){
-	/* Coloca un sitio offline */
-	char error[200];
-	int db_fail;
-	T_site *site;
-
-	if(!db_site_status(db,dictionary_get(t->data,"namespace_id"),
-	   dictionary_get(t->data,"site_id"),
-	   dictionary_get(t->data,"status"),error,&db_fail)){
-		if(db_fail)
-			task_done(t,HTTP_501,M_DB_ERROR);
-		else
-			task_done(t,HTTP_499,error);
-		return 0;
-	}
-	/* Ya cambiado en la base de datos... procedemos */
-	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
-	site_stop(site);
-	return 1;
-}
-
-int task_site_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
-	/* Coloca un sitio online */
-	char error[200];
-	int db_fail;
-	T_site *site;
-
-	if(!db_site_status(db,dictionary_get(t->data,"namespace_id"),
-	   dictionary_get(t->data,"site_id"),
-	   dictionary_get(t->data,"status"),error,&db_fail)){
-		if(db_fail)
-			task_done(t,HTTP_501,M_DB_ERROR);
-		else
-			task_done(t,HTTP_499,error);
-		return 0;
-	}
-	/* Ya cambiado en la base de datos... procedemos */
-	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
-	site_start(site);
-	return 1;
-}
-
-void task_site_mod(T_task *t, T_lista *l, T_db *db, T_logs *logs){
-	/* Modifica un sitio */
-
-	T_site *site;
-	int db_fail;
-	uint16_t version;
-	char error[200];
-	char aux[40];
-
-	/* Verificamos que el sitio corresponda al suscriber_id */
-	version = db_site_exist(db,dictionary_get(t->data,"namespace_id"),
-		dictionary_get(t->data,"site_id"),error,&db_fail);
-	if(!version){
-		if(db_fail){
-			task_done(t,HTTP_501,M_DB_ERROR);
-		} else {
-			task_done(t,HTTP_404,"Sitio no existe\"");
-		}
-		return;
-	}
-	/* Verificamos que el sitio exista en las estructuras */
-	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
-	if(!site){
-		task_done(t,HTTP_500,"Error fatal a analizar: task_site_mod");
-		return;
-	}
-
-	sprintf(aux,"%lu",version);
-	dictionary_add(t->data,"version",aux);
-	/* modificamos el sitio en la base de datos */
-	if(!db_site_mod(db,site,t->data,error,&db_fail)){
-		if(db_fail)
-			task_done(t,HTTP_501,M_DB_ERROR);
-		else{
-			task_done(t,HTTP_499,error);
-		}
-	}
-	task_done(t,HTTP_200,"Sitio modificado");
 }
 
 /*************************************************
@@ -814,15 +846,15 @@ void task_run(T_task *t, T_lista *sites, T_lista *workers,
 		case T_NAMESPACE_DEL:
 			task_namespace_del(t,sites,db,config,logs); break;
 		case T_NAMESPACE_STOP:
-			task_namespace_stop(t,sites,db); break;
+			task_namespace_stop(t,sites,db,logs); break;
 		case T_NAMESPACE_START:
-			task_namespace_start(t,sites,db); break;
+			task_namespace_start(t,sites,db,logs); break;
 		case T_NAMESPACE_SHOW:
 			task_namespace_show(t,db,logs); break;
 
 		/* SITIOS */
 		case T_SITE_LIST:
-			task_site_list(t,db,logs);break;
+			task_site_list(t,sites,db,logs);break;
 		case T_SITE_SHOW:
 			task_site_show(t,db,logs); break;
 		case T_SITE_ADD:

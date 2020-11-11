@@ -19,12 +19,16 @@
 #define TIMEONLINE 20	//tiempo que debe estar en preparado para pasar a online. En segundos
 
 typedef enum { S_OFFLINE, S_ONLINE} T_site_status;
+typedef enum {SC_OK, SC_POOR, SC_NONE} T_sc_status;	/* Estado del sitio dentro del cluster */
+
 typedef enum { W_ONLINE, W_OFFLINE, W_PREPARED, W_BROKEN, W_UNKNOWN} T_worker_status;
 typedef enum { P_ONLINE, P_OFFLINE, P_PREPARED, P_BROKEN, P_UNKNOWN} T_proxy_status;
 
 /*****************************
           Varios
 ******************************/
+void itosstatus(T_site_status i, char *name);
+void itoscstatus(T_sc_status i, char *name);
 void itowstatus(T_worker_status i, char *name);
 void itopstatus(T_proxy_status i, char *name);
 
@@ -46,20 +50,22 @@ void s_e_set_name(T_s_e *a);
  	Sitio
 ******************************/
 typedef struct {
-	unsigned int id;   //4 bytes
-	unsigned int version;
+	uint32_t id;
+	uint16_t version;
 	char name[100];
 	unsigned int size;   //4 bytes
-	char *dir;   //Directorio
+	char *dir;   //Directorio desde los hash de los subdirectorios
+				 // EJ: 06/90/a12k3123n1k231
 	T_site_status status;
+	T_sc_status sc_status;
 	T_lista *alias;
 	T_lista *indexes;
 	T_lista *workers;
 } T_site;
 
-void site_init(T_site *s, char *name, unsigned int id, char *dir,
+void site_init(T_site *s, char *name, uint32_t id, char *dir,
                unsigned int version, unsigned int size);
-int site_get_id(T_site *s);
+uint32_t site_get_id(T_site *s);
 unsigned int site_get_version(T_site *s);
 char *site_get_name(T_site *s);
 char *site_get_dir(T_site *s);
@@ -78,6 +84,8 @@ void site_set_status(T_site *s, T_site_status status);
 /* Retorna la lista de workers */
 T_lista *site_get_workers(T_site *s);
 void site_set_size(T_site *s, unsigned int size);
+
+void site_to_json(T_site *s,char **message);
 
 /*****************************
  	Worker
@@ -126,6 +134,8 @@ int worker_send_receive(T_worker *w, char *send_message, uint32_t send_message_s
                         char **rcv_message, uint32_t *rcv_message_size);
 int worker_sync(T_worker *w, T_lista *s);
 T_worker_status worker_get_status(T_worker *w);
+
+void worker_to_json(T_worker *w,char **message);
 
 
 /*****************************

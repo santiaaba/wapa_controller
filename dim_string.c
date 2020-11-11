@@ -13,10 +13,24 @@ void dim_copy(char **s1, char *s2){
 	//printf("dim aca 3\n");
 }
 
+void dim_trim(char **s1){
+	char *aux=NULL;
+	int l;
+
+	l = strlen(*s1);
+	aux=(char *)malloc(l);
+	strncpy(aux,*s1,l-1);
+	strcpy(*s1,aux);
+	free(aux);
+}
+
 void dim_concat(char **s1, char *s2){
 	/* Concatena s1 con s2 retornando el
 	 * resultado en s1 dimencionando la
 	 * memoria si es que no entra */
+	//printf("Entro concat\n");
+	//printf("s1 length: %i\n", strlen(*s1));
+	//printf("s2 length: %i\n", strlen(s2));
 	int tam = strlen(*s1) + strlen(s2) + 1;
 	//printf("dim_concat: '%s' + '%s'\n",*s1,s2);
 	//printf("dim_concat tam: %i para %p\n",tam,*s1);

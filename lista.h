@@ -38,4 +38,6 @@ void lista_erase(T_lista *l);
 void *lista_find(T_lista *l, int (*find_id)(void*), int value);
 void *lista_sort(T_lista *l, float (*get_value)(void*), int asc);
 
+void *lista_to_json(T_lista *l, char **message, void(*to_json)(void*,char**));
+
 #endif

@@ -299,7 +299,7 @@ static int handle_POST(struct MHD_Connection *connection,
 						dictionary_add(con_info->data,"site_id",value);
 						parce_data((char *)url,'/',&pos,value);
 						if(strlen(value)>0){
-							if(0 == strcmp("ftp_users",value)){
+							if(0 == strcmp("ftp_user",value)){
 								parce_data((char *)url,'/',&pos,value);
 								if(strlen(value)>0){
 									/* EDICION FTP */
@@ -384,13 +384,13 @@ static int handle_DELETE(struct MHD_Connection *connection, const char *url){
 				dictionary_add(data,"namespace_id",value);
 				parce_data((char *)url,'/',&pos,value);
 				if(strlen(value)>0){
-					if(0 == strcmp("sites",value)) {
+					if(0 == strcmp("site",value)) {
 						parce_data((char *)url,'/',&pos,value);
 						if(strlen(value)>0) {
 							dictionary_add(data,"site_id",value);
 							parce_data((char *)url,'/',&pos,value);
 							if(strlen(value)>0) {
-								if(0 == strcmp("ftp_users",value)) {
+								if(0 == strcmp("ftp_user",value)) {
 									parce_data((char *)url,'/',&pos,value);
 									if(strlen(value)>0) {
 										dictionary_add(data,"ftp_id",value);
@@ -500,13 +500,13 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 			parce_data((char *)url,'/',&pos,value);
 			if(strlen(value)>0){
 				printf("sitios\n");
-				if(0 == strcmp("sites",value)){
+				if(0 == strcmp("site",value)){
 					parce_data((char *)url,'/',&pos,value);
 					if(strlen(value)>0){
 						dictionary_add(data,"site_id",value);
 						parce_data((char *)url,'/',&pos,value);
 						if(strlen(value)>0){
-							if(0 == strcmp("ftp_users",value)){
+							if(0 == strcmp("ftp_user",value)){
 								parce_data((char *)url,'/',&pos,value);
 								if(strlen(value)>0){
 									server_url_error(result,&ok);

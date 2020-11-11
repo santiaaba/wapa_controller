@@ -137,19 +137,24 @@ int assign_workers(T_lista *candidates, T_lista *proxys,
 }
 
 int des_assign_workers(T_site *site, T_lista *workers){
-	/* Quita workers de un sitio en el cual excede su cantidad
-	Los workers que se eliminan son los que tengan mayor carga (load average) */
+	/* Quita workers de un sitio en el cual excede su cantidad o porque
+	 * paso a estar OFFLINE. Los workers que se eliminan son los que
+	 * tengan mayor carga (load average) */
 
 	int cant=0;
+	int size;	/* Cantidad de workers que debe tener el sitio asignados */
 	T_worker *worker;
+	if(site_get_status(site) == S_OFFLINE)
+		size = 0;
+	else
+		size = site_get_size(site);
 
 	lista_sort(site_get_workers(site),worker_get_load,1);
-	while(site_get_real_size(site) > site_get_size(site)){
+	while(site_get_real_size(site) > size){
 		worker = lista_remove(site_get_workers(site));
 		if(worker){
 			cant++;
 			/* Removemos ahora del worker el sitio*/
-			//lista_remove_id(worker_get_sites(worker),site_get_id(site));
 			lista_exclude(worker_get_sites(worker),site_get_id,site_get_id(site));
 		}
 	}
@@ -339,8 +344,12 @@ int check_workers(T_lista *workers, T_lista *proxys, T_config *config){
 
 int normalice_sites(T_lista *sites, T_lista *workers,
 		    T_lista *proxys, T_config *config){
-	/* Recorre la lista de sitios buscando sitios donde la
-	 * cantidad de workers asignados no sea la adecuada */
+	/* Recorre la lista de sitios */
+	/* Aquellos sitios ONLINE donde la cantidad de workwes
+	 * asignados no sea la adecuada, trata de corregirlo */
+
+	/* Aquellos sitios OFFLINE que encuentra con workers
+	 * asignados... los desasigna */
 
 	/* Retorna 1 si al menos se a producido un cambio */
 
@@ -350,7 +359,6 @@ int normalice_sites(T_lista *sites, T_lista *workers,
 	int changed = 0;
 
 	printf("\n----- NORMALICE ----\n");
-	//lista_print(sites);
 	lista_first(sites);
 	lista_init(&candidates,sizeof(T_worker));
 	while(!lista_eol(sites)){
@@ -365,7 +373,9 @@ int normalice_sites(T_lista *sites, T_lista *workers,
 				changed |= assign_workers(&candidates,proxys,site,config);
 			}
 		} else {
-			if(siterealsize > site_get_size(site)){
+			/* Si le sobran workers o tiene workers cuando esta OFFLINE */
+			if((siterealsize > site_get_size(site)) ||
+			   (siterealsize && site_get_status(site) == S_OFFLINE)){
 				/* Estan sobrando workers */
 				printf("\tEstan sobrando workers\n");
 				changed |= des_assign_workers(site,workers);
@@ -452,7 +462,7 @@ void main(){
 	/* Comenzamos el loop del controller */
 	while(1){
 		printf("Loop\n");
-		sleep(100);
+		sleep(10);
 		//continue;
 		changed = 0;
 		server_lock(&server);

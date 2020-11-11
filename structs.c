@@ -4,6 +4,21 @@
 	 Varios 
 ******************************/
 
+void itosstatus(T_site_status i, char *name){
+	switch(i){
+		case S_ONLINE: strcpy(name,"ONLINE"); break;
+		case S_OFFLINE: strcpy(name,"OFFLINE"); break;
+	}
+}
+
+void itoscstatus(T_sc_status i, char *name){
+	switch(i){
+		case SC_OK: strcpy(name,"OK"); break;
+		case SC_POOR: strcpy(name,"POOR"); break;
+		case SC_NONE: strcpy(name,"NONE"); break;
+	}
+}
+
 void itowstatus(T_worker_status i, char *name){
 	switch(i){
 		case W_ONLINE: strcpy(name,"ONLINE"); break;
@@ -35,7 +50,7 @@ void _4bytes_to_int(char *_4bytes, uint32_t *i){
 /*****************************
 	 Sitios
 ******************************/
-void site_init(T_site *s, char *name, unsigned int id, char *dir,
+void site_init(T_site *s, char *name, uint32_t id, char *dir,
 	       unsigned int version, unsigned int size){
 
 	s->workers = (T_lista*)malloc(sizeof(T_lista));
@@ -49,6 +64,7 @@ void site_init(T_site *s, char *name, unsigned int id, char *dir,
 	strcpy(s->name,name);
 	dim_copy(&(s->dir),dir);
 	s->status = W_ONLINE;
+	s->sc_status = SC_NONE;
 	s->id = id;
 	s->version = version;
 	s->size = size;
@@ -58,7 +74,7 @@ T_lista *site_get_workers(T_site *s){
 	return s->workers;
 }
 
-int site_get_id(T_site *s){
+uint32_t site_get_id(T_site *s){
 	return s->id;
 }
 
@@ -127,6 +143,32 @@ void site_start(T_site *s){
 	site_update(s);
 }
 
+void site_to_json(T_site *s,char **message){
+	char aux[200];
+	char *ws = NULL;
+	char *ptr;
+	dim_init(message);
+	dim_copy(message,"{\"name\":\"");
+	dim_concat(message,s->name);
+	dim_concat(message,"\",\"id\":\"");
+	sprintf(aux,"%llu", s->id);
+	dim_concat(message,aux);
+	dim_concat(message,"\",\"directory\":\"");
+	dim_concat(message,s->dir);
+	dim_concat(message,"\",\"version\":\"");
+	sprintf(aux,"%lu", s->version);
+	dim_concat(message,aux);
+	dim_concat(message,"\",\"status\":\"");
+	itosstatus(s->status,aux);
+	dim_concat(message,aux);
+	dim_concat(message,"\",\"clusterStatus\":\"");
+	itoscstatus(s->sc_status,aux);
+	dim_concat(message,aux);
+	dim_concat(message,"\",\"workers\":");
+	lista_to_json(s->workers,&ws,worker_to_json);
+	dim_concat(message,ws);
+	dim_concat(message,"}");
+}
 /*****************************
 	 Workers
 ******************************/
@@ -555,6 +597,16 @@ int worker_reload(T_worker *w){
 	free(rcv_message);
 	return ok;
 }
+
+void worker_to_json(T_worker *w,char **message){
+	char aux[200];
+	char *ptr;
+	dim_init(message);
+	dim_copy(message,"{\"name\":\"");
+	dim_concat(message,w->name);
+	dim_concat(message,"\"}");
+}
+
 
 /*****************************
 	 Proxys

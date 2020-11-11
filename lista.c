@@ -204,6 +204,38 @@ void *lista_sort(T_lista *l, float (*get_value)(void*), int des){
 			lista_next(l);
 		}
 	}
+}
 
+void *lista_to_json(T_lista *l, char **message, void(*to_json)(void*,char**)){
+	
+	char *aux = NULL;
+	void *e;
+	int vacia=1;
+	lista_first(l);
+	dim_init(message);
+	dim_copy(message,"[");
+	while(!lista_eol(l)){
+		vacia=0;
+		printf("dim_init 1\n");
+		e = lista_get(l);
+		to_json(e,&aux);
+		printf("dim_init 2\n");
+		printf("Entro en la lista 0:%s + %s\n",*message,aux);
+		dim_concat(message,aux);
+		printf("dim_init 3: %s\n",*message);
+		dim_concat(message,",");
+		printf("Entro en la lista 1\n");
+		printf("datos: %s\n",*message);
+		lista_next(l);
+	}
+	printf("llegamos aca\n");
 
+	if(!vacia){
+		printf("llegamos aca 1\n");
+		dim_trim(message);
+		printf("llegamos aca 2\n");
+	}
+	printf("llegamos aca 3: %s\n",*message);
+	dim_concat(message,"]");
+	printf("llegamos aca 4\n");
 }

@@ -24,7 +24,6 @@ void json_mysql_result_row(MYSQL_ROW *row, char *col_names[50], int cant_cols, c
 	}
 }
 
-
 void json_mysql_result(MYSQL_RES *result, char **message){
 	/* Retorna un resultado Mysql como JSON */
 	MYSQL_ROW *row;

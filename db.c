@@ -218,12 +218,14 @@ int db_load_site_alias(T_db *db, T_site *site, char *site_id, char *error, int *
 
 int db_load_sites(T_db *db, T_lista *l, char *error, int *db_fail){
 	char query[200];
+	char dir[200];
+	char *ptr;
 	MYSQL_ROW row, row_alias;
 	T_site *new_site;
 	T_s_e *new_alias;
 
-	strcpy(query,"select s.id,s.name,hash_dir,version,size from web_site s \
-			 	  inner join web_namespace p on (s.namespace_id = p.id)");
+	strcpy(query,"select s.id,s.name,n.hash_dir,s.version,s.size,s.dir from web_site s \
+			 	  inner join web_namespace n on (s.namespace_id = n.id)");
 	logs_write(db->logs,L_DEBUG,"db_load_sites", query);
 
 	if(mysql_query(db->con,query)){
@@ -236,7 +238,8 @@ int db_load_sites(T_db *db, T_lista *l, char *error, int *db_fail){
 	MYSQL_RES *result = mysql_store_result(db->con);
 	while ((row = mysql_fetch_row(result))){
 		new_site = (T_site*)malloc(sizeof(T_site));
-		site_init(new_site,row[1],atoi(row[0]),row[2],atoi(row[3]),atoi(row[4]));
+		sprintf(dir,"%s/%s",row[2],row[5]);
+		site_init(new_site,row[1],strtoul(row[0],&ptr,10),dir,atoi(row[3]),atoi(row[4]));
 		/* Cargamos los alias */
 		if(!db_load_site_alias(db,new_site,row[0],error,db_fail))
 			return 0;
@@ -325,7 +328,6 @@ int db_namespace_list(T_db *db, char **message, int *db_fail){
 int db_namespace_show(T_db *db,char *namespace_id,char **message,int *db_fail){
 	/* Retorna en formato json los datos de un namespace */
 	char query[200];
-	char aux[200];
 	MYSQL_FIELD *field;
 	int fields = 0;
 	char *col_names[100];
@@ -488,7 +490,7 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int namespace_i
 	char query[300];
 	MYSQL_RES *result;
 	MYSQL_ROW row;
-	unsigned int site_id;
+	uint32_t site_id;
 	unsigned int index_id;
 	T_s_e *newindex;
 	int i;
@@ -716,100 +718,72 @@ int db_get_sites_id(T_db *db, char *namespace_id, int site_ids[256], int *site_i
 	return 1;
 }
 
-void db_site_list(T_db *db, char **data, char *namespace_id, int *db_fail){
-	/* Retorna en formato json la lista de sitios dado el id de
- 	 * un namespace pasado por parametro. Si namespace_id="A" entonces lista todo */
+int db_site_list(T_db *db, T_lista *lista, char *namespace_id, int *db_fail){
+	/* Retorna en el parametro list el listado de id de los sitios */
 
-	int size=300; //Los datos de un solo sitio no deben superar este valor
 	char query[200];
-	int real_size;
-	int exist=0;
+	char *ptr;
+	uint32_t *site_id;
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
 	if(namespace_id[0] == 'A')
-		sprintf(query,"select id,name,status from web_site");
+		sprintf(query,"select id from web_site");
 	else
-		sprintf(query,"select id,name,status from web_site where namespace_id =%s",namespace_id);
-	printf("DB_SITE_LIST: %s\n",query);
-	mysql_query(db->con,query);
+		sprintf(query,"select id from web_site where namespace_id =%s",namespace_id);
+	if(mysql_query(db->con,query)){
+		printf("FALLO estamos\n");
+		*db_fail = 1;
+		return 0;
+	}
+	*db_fail = 0;
 	result = mysql_store_result(db->con);
-	printf("DB_SITE_LIST paso coneccion a base\n");
-	*data=(char *)realloc(*data,size);
-	strcpy(*data,"200|[");
-	printf("DB_SITE_LIST paso strcpy\n");
 	while(row = mysql_fetch_row(result)){
-		exist = 1;
-		printf("Agregando\n");
-		if(strlen(*data) + strlen(row[0]) + strlen(row[1]) + strlen(row[2]) + 31 > size){
-			size =+ 300;
-			*data=(char *)realloc(*data,size);
-		}
-		sprintf(*data,"%s{\"id\":\"%s\",\"name\":\"%s\",\"status\":\"%s\"},",*data,row[0],row[1],row[2]);
+		site_id = (uint32_t *)malloc(sizeof(uint32_t));
+		*site_id = strtoul(row[0],&ptr,10);
+		printf("Guardamos id:%lu\n",*site_id);
+		lista_add(lista,site_id);
+		printf("pasamos\n");
 	}
-	printf("DB_SITE_LIST: TERMINO WHILE %s\n");
-	if(exist){
-		(*data)[strlen(*data) - 1] = ']';
-	} else {
-		strcat(*data,"]");
-	}
-	// Redimencionamos para no desperdiciar memoria
-	//*data=(char *)realloc(*data,strlen(*data)+1);
-	printf("Resultado:-%s-\n",*data);
+	printf("retornamos lista\n");
+	return 1;
 }
 
-void db_site_show(T_db *db, char **data, char *site_id, char *namespace_id){
+int db_site_show(T_db *db, char **message, char *site_id, char *namespace_id, int *db_fail){
 	/* Retorna en formato json los datos de un sitio dado
  	 * en base al id pasado por parametro */
 
 	char query[200];
-	char aux[500];
+	char *col_names[100];
+	int fields = 0;
+	MYSQL_FIELD *field;
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	int real_size;
 
 	sprintf(query,"select * from web_site where id =%s and namespace_id=%s",site_id,namespace_id);
 	printf("DB_SITE_LIST: %s\n",query);
-	mysql_query(db->con,query);
-	if(result = mysql_store_result(db->con)){
-		if(row = mysql_fetch_row(result)){
-			printf("Allocamos memoria\n");
-			real_size = 500;
-			*data=(char *)realloc(*data,real_size);
-			printf("colocamos info\n");
-			sprintf(*data,"200|{\"id\":\"%s\",\"version\":\"%s\",\"name\":\"%s\",\"size\":\"%s\",\"namespace_id\":\"%s\",\"status\":\"%s\",\"urls\":[",
-				row[0],row[1],row[2],row[3],row[4],row[5]);
-	
-			/* Listado de alias */
-			sprintf(query,"select id,alias from web_alias where site_id =%s",site_id);
-			printf("DB_SITE_LIST: %s\n",query);
-			mysql_query(db->con,query);
-			result = mysql_store_result(db->con);
-			while(row = mysql_fetch_row(result)){
-				sprintf(aux,"{\"id\":\"%s\",\"url\":\"%s\"),",row[0],row[1]);
-				//Si no entra en *data, reallocamos para que entre y un poco mas
-				if(strlen(*data)+strlen(aux)+1 > real_size){
-					real_size =+ 200;
-					*data=(char *)realloc(*data,real_size);
-				}
-				strcat(*data,aux);
-			}
-			// Reemplazamos la última "," por "]"
-			(*data)[strlen(*data) - 1] = ']';
-			//Cerramos los datos con '}' y redimencionamos el string
-		} else {
-			real_size = 100;
-			*data=(char *)realloc(*data,real_size);
-			sprintf(*data,"{\"error\":\"site not exist\"");
-		}
-	} else {
-		real_size = 100;
-		*data=(char *)realloc(*data,real_size);
-		sprintf(*data,"{\"error\":\"db error\"");
+	if(mysql_query(db->con,query)){
+		logs_write(db->logs,L_ERROR,"db_site_show","DB_ERROR");
+		printf("Error contra la base de datos\n");
+		*db_fail = 1;
+		return 0;
 	}
-	real_size = strlen(*data) + 2;
-	*data=(char *)realloc(*data,real_size);
-	strcat(*data,"}");
+	*db_fail = 0;
+	printf("paso\n");
+	result = mysql_store_result(db->con);
+	if((mysql_num_rows(result) == 1)){
+		while(field = mysql_fetch_field(result)){
+			col_names[fields] = field->name;
+			fields++;
+		}
+		row = mysql_fetch_row(result);
+		json_mysql_result_row(row,col_names,fields,message);
+		return 1;
+	} else {
+		dim_copy(message,"sitio no existe");
+		return 0;
+	}
 }
 
 int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fail){

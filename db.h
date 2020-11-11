@@ -48,10 +48,10 @@ int db_site_add(T_db *db, T_site **newsite, char *name,
 		unsigned int namespace_id, char *error, int *db_fail);
 
 int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fail);
-void db_site_list(T_db *db, char **data, char *namespace_id, int *db_fail);
+int db_site_list(T_db *db, T_lista *lista, char *namespace_id, int *db_fail);
 int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fail);
 uint16_t db_site_exist(T_db *db, char *namespace_id, char *site_id, char *error, int *db_fail);
-void db_site_show(T_db *db, char **data, char *site_id, char *namespace_id);
+int db_site_show(T_db *db, char **message, char *site_id, char *namespace_id, int *db_fail);
 int db_site_status(T_db *db, char *namespace_id, char *site_id, char *status, char *error, int *db_fail);
 int db_del_all_site(T_db *db, char *namespace_id, char *error, int *db_fail);
 int db_get_hash_dir(T_db *db, char *site_id, char *hash_dir, char *site_name,char *error, int *db_fail);
