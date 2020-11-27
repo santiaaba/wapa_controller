@@ -69,7 +69,7 @@ typedef enum {
 		T_SITE_MOD,
 		T_SITE_DEL,
 		T_SITE_ALLDEL,
-		T_SITE_STOP,
+		T_SITE_STOP,			// 17
 		T_SITE_START,
 
 		T_SERVER_LIST,
@@ -118,7 +118,6 @@ typedef struct {
 	int http_code;			// Codigo http de rest a retornar
 } T_task;
 
-T_task_type task_c_to_type(char c);
 int valid_task_id(char *s);
 void task_init(T_task *t);
 void task_set(T_task *t, T_task_type type, T_dictionary *data);

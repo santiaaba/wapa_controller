@@ -7,7 +7,7 @@
 
 void dim_init(char **s1);
 void dim_copy(char **s1, char *s2);
-void dim_trim(char **s1);
+void dim_end(char **s1, char c);
 void dim_concat(char **s1, char *s2);
 
 #endif

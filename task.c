@@ -72,42 +72,6 @@ void task_json_result(T_task *t, char **result){
 	printf("task_json_result:%s\n",*result);
 }
 
-T_task_type task_c_to_type(char c){
-	/* Hay dos restricciones.
- 	 * 't': Es utilizado cuando el core solicita el estado de un task
- 	 * 'c': Es utilizado cuando el core solicita un chequeo al controller
- 	 */
-	switch(c){
-		case '0': return T_NAMESPACE_ADD;
-		case '1': return T_NAMESPACE_DEL;
-		case '2': return T_NAMESPACE_STOP;
-		case '3': return T_NAMESPACE_START;
-		case '4': return T_NAMESPACE_SHOW;
-
-		case 'l': return T_SITE_LIST;
-		case 'q': return T_SITE_LIST_ALL;
-		case 's': return T_SITE_SHOW;
-		case 'a': return T_SITE_ADD;
-		case 'm': return T_SITE_MOD;
-		case 'd': return T_SITE_DEL;
-		case 'k': return T_SITE_STOP;
-		case 'e': return T_SITE_START;
-
-		case 'b': return T_FTP_LIST;
-		case 'h': return T_FTP_ADD;
-		case 'f': return T_FTP_DEL;
-		case 'g': return T_FTP_MOD;
-
-		case 'L': return T_SERVER_LIST;
-		case 'S': return T_SERVER_SHOW;
-		case 'A': return T_SERVER_ADD;
-		case 'M': return T_SERVER_MOD;
-		case 'D': return T_SERVER_DEL;
-		case 'K': return T_SERVER_STOP;
-		case 'E': return T_SERVER_START;
-	}
-}
-
 /****************************************
 	     Verificadiones
 *****************************************/
@@ -172,15 +136,9 @@ char *task_get_id(T_task *t){
 void task_done(T_task *t, int http_code, char *message){
 	printf("Task DONE: '%s'\n",message);
 	t->status = T_DONE;
-	printf("Task DONE 1?\n");
 	t->http_code = http_code;
-	printf("Task DONE 2?\n");
 	t->time = time(NULL);
-	printf("Task DONE 3?\n");
 	dim_copy(&(t->result),message);
-	printf("Task DONE 4?\n");
-	//strcpy(t->result,message);
-	printf("Task DONE\n");
 }
 
 T_dictionary *task_get_data(T_task *t){
@@ -231,11 +189,8 @@ void task_site_list(T_task *t, T_lista *sitios, T_db *db, T_logs *logs){
 	/* Obtenidos el listado de ids, ahora buscamos los sitios
  	 * en las estructuras */
 		lista_first(idSites);
-		printf("ACA estamos\n");
 		while(!lista_eol(idSites)){
-			printf("ACA estamos 1\n");
 			siteID = lista_get(idSites);
-			printf("ACA estamos 2\n");
 			printf("Buscando SiteID: %i\n",*siteID);
 			site = lista_find(sitios, site_get_id, *siteID);
 			if(!site){
@@ -256,19 +211,22 @@ T_task_status task_get_status(T_task *t){
     return t->status;
 }
 
-void task_site_show(T_task *t, T_db *db, T_logs *logs){
-	char *site_id;
+void task_site_show(T_task *t, T_lista *sitios, T_logs *logs){
+	T_site *site = NULL;
 	char *namespace_id;
 	char *message = NULL;
 	int db_fail;
 
-	site_id = dictionary_get(t->data,"site_id");
-	namespace_id = dictionary_get(t->data,"namespace_id");
-	db_site_show(db,&message,site_id,namespace_id,&db_fail);
-	if(db_fail)
-        task_done(t,HTTP_501,M_DB_ERROR);
-    else
+	//site_id = dictionary_get(t->data,"site_id");
+	site = lista_find(sitios,site_get_id,atoi(dictionary_get(t->data,"site_id")));
+	//namespace_id = dictionary_get(t->data,"namespace_id");
+	//db_site_show(db,&message,site_id,namespace_id,&db_fail);
+	if(!site)
+        task_done(t,HTTP_404,"\"Sitio no existe\"");
+    else {
+		site_to_json(site,&message);
         task_done(t,HTTP_200,message);
+	}
 }
 
 int task_site_add(T_task *t, T_lista *l, T_db *db, T_config *config, T_logs *logs){
@@ -335,7 +293,7 @@ int task_site_add(T_task *t, T_lista *l, T_db *db, T_config *config, T_logs *log
 	printf("agregado al listado\n");
 	lista_add(l,newsite);
 
-	task_done(t,HTTP_200,"Sitio agregado");
+	task_done(t,HTTP_200,"\"Sitio agregado\"");
 	return 1;
 }
 
@@ -364,7 +322,7 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 	site = lista_find(l,site_get_id,atoi(site_id));
 	if(site == NULL){
 		printf("sitio no existe en las estructuras del controlador\n");
-		task_done(t,HTTP_404,"Sitio no existe");
+		task_done(t,HTTP_404,"\"Sitio no existe\"");
 		return;
 	}
 	/* Lo quitamos de las estructuras y del cluster */
@@ -401,7 +359,7 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 	}
 	task_destroy(&task_aux);
 	if(!ok){	
-		task_done(t,HTTP_500,"Error fatal a analizar");
+		task_done(t,HTTP_500,"\"Error fatal a analizar\"");
 		return 0;
 	}
 
@@ -419,7 +377,7 @@ int task_site_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *logs){
 
 	printf("Borramos del directorio\n");
 
-	task_done(t,HTTP_200,"sitio borrados");
+	task_done(t,HTTP_200,"\"sitio borrados\"");
 	logs_write(logs,L_INFO,"task_site_del","Sitio borrado");
 	return 1;
 }
@@ -431,17 +389,19 @@ int task_site_stop(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 	T_site *site;
 
 	if(!db_site_status(db,dictionary_get(t->data,"namespace_id"),
-	   dictionary_get(t->data,"site_id"),
-	   dictionary_get(t->data,"status"),error,&db_fail)){
+	   dictionary_get(t->data,"site_id"),"0",error,&db_fail)){
 		if(db_fail)
 			task_done(t,HTTP_501,M_DB_ERROR);
 		else
 			task_done(t,HTTP_499,error);
 		return 0;
 	}
+	printf("Ya stopeamos el sitio en la base de datos\n");
 	/* Ya cambiado en la base de datos... procedemos */
 	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
+	printf("Enviando a borrar el sitio %s en los workers\n",site_get_name(site));
 	site_stop(site);
+	task_done(t,HTTP_200,"\"sitio detenido\"");
 	return 1;
 }
 
@@ -452,8 +412,7 @@ int task_site_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 	T_site *site;
 
 	if(!db_site_status(db,dictionary_get(t->data,"namespace_id"),
-	   dictionary_get(t->data,"site_id"),
-	   dictionary_get(t->data,"status"),error,&db_fail)){
+	   dictionary_get(t->data,"site_id"),"1",error,&db_fail)){
 		if(db_fail)
 			task_done(t,HTTP_501,M_DB_ERROR);
 		else
@@ -463,6 +422,7 @@ int task_site_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 	/* Ya cambiado en la base de datos... procedemos */
 	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
 	site_start(site);
+	task_done(t,HTTP_200,"\"sitio iniciado\"");
 	return 1;
 }
 
@@ -482,14 +442,14 @@ void task_site_mod(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 		if(db_fail){
 			task_done(t,HTTP_501,M_DB_ERROR);
 		} else {
-			task_done(t,HTTP_404,"Sitio no existe\"");
+			task_done(t,HTTP_404,"\"Sitio no existe\"");
 		}
 		return;
 	}
 	/* Verificamos que el sitio exista en las estructuras */
 	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
 	if(!site){
-		task_done(t,HTTP_500,"Error fatal a analizar: task_site_mod");
+		task_done(t,HTTP_500,"\"Error fatal a analizar: task_site_mod\"");
 		return;
 	}
 
@@ -503,7 +463,7 @@ void task_site_mod(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 			task_done(t,HTTP_499,error);
 		}
 	}
-	task_done(t,HTTP_200,"Sitio modificado");
+	task_done(t,HTTP_200,"\"Sitio modificado\"");
 }
 
 
@@ -532,7 +492,7 @@ int task_namespace_show(T_task *t, T_db *db, T_logs *logs){
 	if(!db_namespace_show(db,dictionary_get(t->data,"namespace_id"),&message,&db_fail)){
 		printf("namespace_show 1\n");
 		if(db_fail)
-			task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_show");
+			task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_show\"");
 		else
 			task_done(t,HTTP_404,message);
 	} else {
@@ -545,9 +505,9 @@ void task_namespace_add(T_task *t, T_db *db, T_logs *logs){
 	int db_fail;
 
 	if(db_namespace_add(db,t->data,&db_fail)){
-		task_done(t,HTTP_200,"Namespace agregado");
+		task_done(t,HTTP_200,"\"Namespace agregado\"");
 	} else {
-		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_add");
+		task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_add\"");
 	}
 }
 
@@ -593,11 +553,11 @@ void task_namespace_del(T_task *t, T_lista *l, T_db *db, T_config *c, T_logs *lo
 	if(ok){
 		/* Eliminados los sitios borramos la suscripcion de la base de datos */
 		if(!db_namespace_del(db,namespace_id))
-			task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_del:1");
+			task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_del:1\"");
 		else
-			task_done(t,HTTP_200,"Namespace eliminado");
+			task_done(t,HTTP_200,"\"Namespace eliminado\"");
 	} else
-		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_del:2");
+		task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_del:2\"");
 }
 
 void task_namespace_stop(T_task *t, T_lista *l, T_db *db, T_logs *logs){
@@ -631,11 +591,11 @@ void task_namespace_stop(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 		}
 		free(task_aux);
 		if(ok)
-			task_done(t,HTTP_200,"Namespace detenido");
+			task_done(t,HTTP_200,"\"Namespace detenido\"");
 		else
-			task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_stop:1");
+			task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_stop:1\"");
 	} else
-		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_stop:2");
+		task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_stop:2\"");
 }
 	
 void task_namespace_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
@@ -668,11 +628,11 @@ void task_namespace_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 		}
 		free(task_aux);
 		if(ok)
-			task_done(t,HTTP_200,"Namespace iniciado");
+			task_done(t,HTTP_200,"\"Namespace iniciado\"");
 		else
-			task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_start:1");
+			task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_start:1\"");
 	} else
-		task_done(t,HTTP_500,"Error fatal a analizar: task_namespace_start:2");
+		task_done(t,HTTP_500,"\"Error fatal a analizar: task_namespace_start:2\"");
 }
 
 /*************************************************
@@ -682,7 +642,7 @@ void task_namespace_start(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 void task_ftp_list(T_task *t, T_db *db){
 
 	if(!db_ftp_list(db,&(t->result),dictionary_get(t->data,"site_id"))){
-		task_done(t,HTTP_500,"Error fatal a analizar: task_ftp_list");
+		task_done(t,HTTP_500,"\"Error fatal a analizar: task_ftp_list\"");
 	}
 	printf("Termino ftp\n");
 }
@@ -707,7 +667,7 @@ void task_ftp_add(T_task *t, T_db *db, T_config *config){
 				task_done(t,HTTP_499,error);
 			}
 		} else
-			task_done(t,HTTP_200,"Usuario ftp agregado");
+			task_done(t,HTTP_200,"\"Usuario ftp agregado\"");
 	}
 }
 
@@ -724,7 +684,7 @@ int task_ftp_del(T_task *t, T_db *db){
 			task_done(t,HTTP_499,error);
 		return 0;
 	} else {
-		task_done(t,HTTP_200,"Usuario ftp eliminado");
+		task_done(t,HTTP_200,"\"Usuario ftp eliminado\"");
 		return 1;
 	}
 }
@@ -773,7 +733,7 @@ void task_server_show(T_task *t, T_db *db, T_lista *lw, T_lista *lp){
 				task_done(t,HTTP_200,message);
 		} else {
 			printf("Server con id:%s no existe\n",id);
-			task_done(t,HTTP_404,"Servidor inexistente");
+			task_done(t,HTTP_404,"\"Servidor inexistente\"");
 		}
 	}
 }
@@ -790,14 +750,14 @@ int task_server_stop(T_task *t, T_db *db, T_lista *lw, T_lista *lp){
 	worker = lista_find(lw,worker_get_id,atoi(id));
 	if(worker){
 		worker_stop(worker);
-		task_done(t,HTTP_200,"Servidor worker detenido");
+		task_done(t,HTTP_200,"\"Servidor worker detenido\"");
 	} else {
 		proxy = lista_find(lp,proxy_get_id,atoi(id));
 		if(proxy){
 			proxy_stop(proxy);
-			task_done(t,HTTP_200,"Servidor proxy detenido");
+			task_done(t,HTTP_200,"\"Servidor proxy detenido\"");
 		} else {
-			task_done(t,HTTP_404,"Servidor inexistente");
+			task_done(t,HTTP_404,"\"Servidor inexistente\"");
 		}
 	}
 }
@@ -819,9 +779,9 @@ int task_server_start(T_task *t, T_db *db, T_lista *lw, T_lista *lp){
 		proxy = lista_find(lp,proxy_get_id,atoi(id));
 		if(proxy){
 			proxy_stop(proxy);
-			task_done(t,HTTP_200,"Servidor proxy iniciado");
+			task_done(t,HTTP_200,"\"Servidor proxy iniciado\"");
 		} else {
-			task_done(t,HTTP_404,"Servidor inexistente");
+			task_done(t,HTTP_404,"\"Servidor inexistente\"");
 		}
 	}
 }
@@ -856,7 +816,7 @@ void task_run(T_task *t, T_lista *sites, T_lista *workers,
 		case T_SITE_LIST:
 			task_site_list(t,sites,db,logs);break;
 		case T_SITE_SHOW:
-			task_site_show(t,db,logs); break;
+			task_site_show(t,sites,logs); break;
 		case T_SITE_ADD:
 			task_site_add(t,sites,db,config,logs); break;
 		case T_SITE_DEL:

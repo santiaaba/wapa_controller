@@ -128,7 +128,7 @@ void *server_do_task(void *param){
 	T_server *s= (T_server *)param;
 
 	while(1){
-		//sleep(5);
+		//sleep(20);
 		//printf("Corremos el task\n");
 		pthread_mutex_lock(&(s->mutex_heap_task));
 			s->runningTask = heap_task_pop(&(s->tasks_todo));
@@ -226,22 +226,25 @@ void server_get_task(T_server *r, T_taskid *taskid, char **message, unsigned int
 		   se retorna una copia del task pero no se quita de la cola */
 		printf("Buscando en cola todo\n");
 		task = heap_task_exist(&(r->tasks_todo),(char *)taskid);
-	}
-	if(task == NULL){
+	} else if(task == NULL){
 		/* Verificamos si esta actualmente corriendo */
 		printf("Verificamos task corriendo\n");
 		task = r->runningTask;
 		printf("Verificamos task corriendo paso\n");
 	}
+
+	/* Ya obtenido o no el task, informamos */
 	if(task == NULL){
 		printf("Task es null\n");
-		sprintf(*message,"{\"taskid\":\"%s\",\"status\":\"INEXIST\"}",taskid);
+		sprintf(*message,"{\"taskid\":\"%s\",\"status\":\"inexist\"}",taskid);
 	} else {
 		/* Armamos en message el resultado de la terea */
 		task_json_result(task,message);
 		printf("REST_SERVER_GET_TASK: %s\n",*message);
+		/*
 		if(task_get_status(task) > T_WAITING)
 			task_destroy(&task);
+		*/
 	}
 
 	pthread_mutex_unlock(&(r->mutex_heap_task));
@@ -514,6 +517,14 @@ static int handle_GET(struct MHD_Connection *connection, const char *url){
 									/* Listado ftp */
 									if(ok = check_ftp_list(data,result))
 										task_set(task,T_FTP_LIST,data);
+							} else if (0 == strcmp("stop",value)){
+								/* Detenemos sitio */
+								task_set(task,T_SITE_STOP,data);
+								ok = 1;
+							} else if (0 == strcmp("start",value)){
+								/* Iniciamos sitio */
+								task_set(task,T_SITE_START,data);
+								ok = 1;
 							} else
 								server_url_error(result,&ok);
 						} else

@@ -64,7 +64,8 @@ typedef struct {
 } T_site;
 
 void site_init(T_site *s, char *name, uint32_t id, char *dir,
-               unsigned int version, unsigned int size);
+               unsigned int version, unsigned int size,
+			   T_site_status status);
 uint32_t site_get_id(T_site *s);
 unsigned int site_get_version(T_site *s);
 char *site_get_name(T_site *s);

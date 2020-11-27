@@ -51,7 +51,8 @@ void _4bytes_to_int(char *_4bytes, uint32_t *i){
 	 Sitios
 ******************************/
 void site_init(T_site *s, char *name, uint32_t id, char *dir,
-	       unsigned int version, unsigned int size){
+	       unsigned int version, unsigned int size,
+		   T_site_status status){
 
 	s->workers = (T_lista*)malloc(sizeof(T_lista));
 	s->alias = (T_lista*)malloc(sizeof(T_lista));
@@ -63,7 +64,7 @@ void site_init(T_site *s, char *name, uint32_t id, char *dir,
 	lista_init(s->indexes,sizeof(T_s_e));
 	strcpy(s->name,name);
 	dim_copy(&(s->dir),dir);
-	s->status = W_ONLINE;
+	s->status = status;
 	s->sc_status = SC_NONE;
 	s->id = id;
 	s->version = version;
@@ -122,7 +123,7 @@ void site_set_status(T_site *s, T_site_status status){
 
 void site_update(T_site *s){
 	/* Le indica a los workers que deben actualziar la iformacion
-	 * del sitio */
+	 * del sitio ya que algo ha cambiado */
 	T_worker *worker;
 
 	lista_first(site_get_workers(s));
@@ -134,8 +135,23 @@ void site_update(T_site *s){
 }
 
 void site_stop(T_site *s){
+	T_worker *w;
+
 	s->status = S_OFFLINE;
-	site_update(s);
+	lista_first(site_get_workers(s));
+	while(!lista_eol(site_get_workers(s))){
+		w = lista_get(site_get_workers(s));
+		worker_remove_site(w,s);
+		lista_next(site_get_workers(s));
+		printf("site_stop: Removemos sitio %s del worker %s\n",site_get_name(s),worker_get_name(w));
+		/* El metodo worker_remove_site termina modificando
+ 		   la lista de workers del sitio. El siguiente
+		   mensaje es para asegurarnos de estar siempre
+		   al menos al principio de la lista. Como la
+		   lista siempre se reduce, tarde o temprano va a
+		   llegar a 0 */
+		lista_first(site_get_workers(s));
+	}
 }
 
 void site_start(T_site *s){
@@ -376,6 +392,7 @@ int worker_add_site(T_worker *w, T_site *s){
 	 * Si no pudo hacerlo retorna 0 caso contrario 1 */
 
 	char aux[100];
+	char *message=NULL;
 	char *send_message = NULL;
 	uint32_t send_message_size;
 	char *rcv_message = NULL;
@@ -442,8 +459,13 @@ int worker_add_site(T_worker *w, T_site *s){
 	ok=1;
 	if(worker_send_receive(w,send_message,send_message_size,&rcv_message,&rcv_message_size)){
 		if(rcv_message[0] == '1'){
+			/* Agregamos el sitio a la lista que mantiene el worker */
 			lista_add(w->sites,s);
+			/* Le indicamos al sitio que agrege el worker a su lista */
 			lista_add(site_get_workers(s),w);
+			dim_init(&message);
+			lista_to_json(site_get_workers(s),&message,worker_to_json);
+			printf("WORKER_ADD_SITE: %s\n",message);
 		}  else {
 			ok=0;
 		}
@@ -461,12 +483,19 @@ int worker_remove_site(T_worker *w, T_site *s){
 	char *rcv_message=NULL;
 	uint32_t rcv_message_size;
 	int ok=1;
+	T_worker *waux;
+	T_site *saux;
 
-	sprintf(send_message,"d%s",site_get_name(s));
+	sprintf(send_message,"d|%s",site_get_name(s));
+	printf("Eliminamos sitio %s del worker %s\n",site_get_name(s),worker_get_name(w));
 
 	if(worker_send_receive(w,send_message,(uint32_t)strlen(send_message)+1,&rcv_message,&rcv_message_size)){
-		lista_exclude(worker_get_sites(w),site_get_id,site_get_id(s));
-		lista_exclude(site_get_workers(s),worker_get_id,worker_get_id(w));
+		saux = lista_exclude(worker_get_sites(w),site_get_id,site_get_id(s));
+		if(saux == NULL)
+			printf("worker_remove_site: POSIBLE ERROR FATAL: No pudo remover el sitio\n");
+		waux = lista_exclude(site_get_workers(s),worker_get_id,worker_get_id(w));
+		if(waux == NULL)
+			printf("worker_remove_site: POSIBLE ERROR FATAL: No pudo remover el worker\n");
 	} else {
 		ok=0;
 	}
@@ -793,6 +822,7 @@ int proxy_add_site(T_proxy *p, T_site *s){
 }
 
 int proxy_change_site(T_proxy *p, T_site *s){
+	/* Dado un sitio, actualiza la configuracion del proxy */
 
 	char send_message[200];
         char *rcv_message=NULL;

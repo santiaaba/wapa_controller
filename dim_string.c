@@ -13,15 +13,26 @@ void dim_copy(char **s1, char *s2){
 	//printf("dim aca 3\n");
 }
 
-void dim_trim(char **s1){
+void dim_end(char **s1,char c){
+	/* Reemplaza el ultimo caracter
+ 	   con el indicado por parametro */
+
+	/*
 	char *aux=NULL;
 	int l;
+	*/
 
+	printf("ACAAA: %s - %c\n",*s1,(*s1)[strlen(*s1)-1]);
+	(*s1)[strlen(*s1)-1] = c;
+	printf("PASO CAAA\n");
+	/*
 	l = strlen(*s1);
+	printf("dim_trim 1: %s - size: %i\n",*s1,l);
 	aux=(char *)malloc(l);
 	strncpy(aux,*s1,l-1);
 	strcpy(*s1,aux);
 	free(aux);
+	*/
 }
 
 void dim_concat(char **s1, char *s2){

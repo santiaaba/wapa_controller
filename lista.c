@@ -69,7 +69,7 @@ unsigned int lista_eol(T_lista *l){
 void *lista_exclude(T_lista *l,int (*find_id)(void*), int value){
 	/* elimina de la lista el primer elemento donde la funcion
  	   pasada por parametro concida con el tercer valor pasado
-	   tambien por parametro. El elemento no se eleimina, solo
+	   tambien por parametro. El elemento no se elimina, solo
 	   se remueve de la lista. El puntero actual queda apuntando
 	   al elemento siguiente */
 	   
@@ -79,22 +79,23 @@ void *lista_exclude(T_lista *l,int (*find_id)(void*), int value){
 	l->actual = l->first;
 	while(!exist && l->actual != NULL){
 		if((*find_id)(l->actual->data) == value){
-			printf("list_site_remove_id: Encontramos el site a eliminar\n");
+			printf("list_remove: Encontramos el el elemento a remover. Lo retornamos\n");
 			return lista_remove(l);
 		} else {
 			l->actual = l->actual->next;
 		}
 	}
+	printf("lista_remove: No encontramos ningun elemento para excluir. Retornamos NULL\n");
+	return NULL;
 }
 
 void *lista_remove(T_lista *l){
-	/* Remueve el elemento donde apunta
-	   el puntero actual y retorna el
-	   elemento  */
+	/* Remueve y retorna el elemento donde apunta
+	   el puntero actual elemento  */
 
 	lista_node *prio;
 	lista_node *aux;
-	void *element = malloc(l->e_size);
+	void *element = NULL;
 
 	if(l->actual != NULL){
 		aux = l->first;
@@ -116,19 +117,20 @@ void *lista_remove(T_lista *l){
 		free(aux);
 		l->size--;
 	}
+	printf("Retornamos el elemento\n");
 	return element;
 }
 
 void lista_copy(T_lista *l, T_lista *t){
-	/* Genera una copia de *l en *t. No se modifica
- 	 * la posicion del puntero actual de *l. No contempla
- 	 * que lista *t este vacia */
+	/* Genera un lista *t con los mismos elementos que en *l.
+	 * No se modifica la posicion del puntero actual de *l.
+	 * No contempla que lista *t este vacia */
 
 	lista_node *aux;
 
 	aux = l->first;
 	while(aux!=NULL){
-		list_add(t,aux->data);
+		lista_add(t,aux->data);
 		aux = aux->next;
 	}
 }
@@ -228,14 +230,9 @@ void *lista_to_json(T_lista *l, char **message, void(*to_json)(void*,char**)){
 		printf("datos: %s\n",*message);
 		lista_next(l);
 	}
-	printf("llegamos aca\n");
-
 	if(!vacia){
-		printf("llegamos aca 1\n");
-		dim_trim(message);
-		printf("llegamos aca 2\n");
+		dim_end(message,']');
+	} else {
+		dim_concat(message,"]");
 	}
-	printf("llegamos aca 3: %s\n",*message);
-	dim_concat(message,"]");
-	printf("llegamos aca 4\n");
 }

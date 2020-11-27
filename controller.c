@@ -37,7 +37,7 @@ void assign_proxys_site(T_lista *proxys, T_site *site){
 }
 
 void assign_proxys_sites(T_lista *proxys, T_lista *sites){
-	/* Actualizamos todos los sitios en los proxys */
+	/* Actualizamos todos los sitios del listado en los proxys */
 	T_proxy *proxy;
 	T_site *site;
 
@@ -49,15 +49,14 @@ void assign_proxys_sites(T_lista *proxys, T_lista *sites){
 			proxy = lista_get(proxys);
 			if(proxy_get_status(proxy) == P_ONLINE ||
 			   proxy_get_status(proxy) == P_PREPARED){
-				printf("entro\n");
+				printf("assing_proxys_site: Actualizando sitio %s en proxy %s\n",
+						site_get_name(site),proxy_get_name(proxy));
 				proxy_change_site(proxy,site);
-				printf("salio\n");
 			}
 			lista_next(proxys);
 		}
 		lista_next(sites);
 	}
-	printf("termino\n");
 }
 
 void init_sync(T_lista *workers, T_lista *sites, T_lista *proxys, T_logs *logs){
@@ -142,19 +141,28 @@ int des_assign_workers(T_site *site, T_lista *workers){
 	 * tengan mayor carga (load average) */
 
 	int cant=0;
+	char *aux = NULL;
 	int size;	/* Cantidad de workers que debe tener el sitio asignados */
 	T_worker *worker;
 	if(site_get_status(site) == S_OFFLINE)
 		size = 0;
 	else
 		size = site_get_size(site);
+	printf("Size: %i contra %i\n",size,site_get_real_size(site));
 
 	lista_sort(site_get_workers(site),worker_get_load,1);
 	while(site_get_real_size(site) > size){
-		worker = lista_remove(site_get_workers(site));
+		lista_first(site_get_workers(site));
+		worker = (T_worker *)lista_remove(site_get_workers(site));
+		printf("El worker es: %p\n",worker);
+		dim_init(&aux);
+		printf("Hasta aca llegamos %s\n", worker_get_name(worker));
+		worker_to_json(worker,&aux);
+		printf("Removemos un worker: %s\n",aux);
 		if(worker){
 			cant++;
 			/* Removemos ahora del worker el sitio*/
+			printf("Removemos el worker del sitio %s\n", worker_get_name(worker));
 			lista_exclude(worker_get_sites(worker),site_get_id,site_get_id(site));
 		}
 	}
@@ -323,9 +331,10 @@ int check_workers(T_lista *workers, T_lista *proxys, T_config *config){
 			if((worker_get_status(worker) == W_BROKEN ||
 			   worker_get_status(worker) == W_UNKNOWN) &&
 			   worker_get_last_status(worker) == W_ONLINE){
+				/* Worker estaba online y ha sufrido un fallo */
 				printf("\tWorker %s paso de ONLINE a estado FALLANDO.\n",
 					worker_get_name(worker));
-				/* Worker estaba online y ha sufrido un fallo */
+				/* Generamos un listado con los sitios que atendia este worker */
 				lista_copy(worker_get_sites(worker),&aux_sites);
 				worker_purge(worker);
 				assign_proxys_sites(proxys,&aux_sites);
@@ -353,9 +362,9 @@ int normalice_sites(T_lista *sites, T_lista *workers,
 
 	/* Retorna 1 si al menos se a producido un cambio */
 
+	static char status[30];
 	T_site *site;
 	T_lista candidates;
-	int siterealsize;
 	int changed = 0;
 
 	printf("\n----- NORMALICE ----\n");
@@ -363,23 +372,25 @@ int normalice_sites(T_lista *sites, T_lista *workers,
 	lista_init(&candidates,sizeof(T_worker));
 	while(!lista_eol(sites)){
 		site = lista_get(sites);
-		siterealsize = site_get_real_size(site);
-		printf("\tRevisamos el sitio %s - real %i: need %i\n",site_get_name(site),siterealsize,site_get_size(site));
-		if(siterealsize < site_get_size(site)){
+
+		itosstatus(site_get_status(site),status);
+		printf("\tRevisamos el sitio %s - status: %s real %i: need:%i\n",
+				site_get_name(site),status,site_get_real_size(site),site_get_size(site));
+
+		if((site_get_real_size(site) < site_get_size(site)) && site_get_status(site) == S_ONLINE){
 			/* Estan faltando workers */
 			lista_erase(&candidates);
 			if(select_workers(workers,&candidates,site)){
-				printf("\tAsignamos los workers\n");
+				printf("\tEstan faltando workers\n");
 				changed |= assign_workers(&candidates,proxys,site,config);
 			}
-		} else {
-			/* Si le sobran workers o tiene workers cuando esta OFFLINE */
-			if((siterealsize > site_get_size(site)) ||
-			   (siterealsize && site_get_status(site) == S_OFFLINE)){
+		} else if((site_get_real_size(site) > site_get_size(site)) ||
+			   (site_get_real_size(site) && site_get_status(site) == S_OFFLINE)){
 				/* Estan sobrando workers */
 				printf("\tEstan sobrando workers\n");
 				changed |= des_assign_workers(site,workers);
-			}
+		} else {
+			printf("Sitio: %s\t\tCORRECTO\n",site_get_name(site));
 		}
 		lista_next(sites);
 	}
@@ -462,7 +473,6 @@ void main(){
 	/* Comenzamos el loop del controller */
 	while(1){
 		printf("Loop\n");
-		sleep(10);
 		//continue;
 		changed = 0;
 		server_lock(&server);
@@ -490,6 +500,7 @@ void main(){
 		check_db(&db);
 
 		printf("Fin del bucle");
+		sleep(10);
 	}
 
 	/* Finalizamos el hilo del server */

@@ -170,6 +170,7 @@ int db_load_site_index(T_db *db, T_site *site, char *site_id, char *error, int *
 	T_s_e *new_index;
 	
 	sprintf(query,"select id,name from web_indexes where site_id=%s order by prioridad desc\n",site_id);
+	printf("Query: %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_load_sites_index", query);
 	if(mysql_query(db->con,query)){
 		/* Ocurrio un error */
@@ -197,6 +198,7 @@ int db_load_site_alias(T_db *db, T_site *site, char *site_id, char *error, int *
 	T_s_e *new_alias;
 	
 	sprintf(query,"select id,alias from web_alias where site_id=%s\n",site_id);
+	printf("Query: %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_load_sites_alias",query);
 	if(mysql_query(db->con,query)){
 		/* Ocurrio un error */
@@ -224,8 +226,9 @@ int db_load_sites(T_db *db, T_lista *l, char *error, int *db_fail){
 	T_site *new_site;
 	T_s_e *new_alias;
 
-	strcpy(query,"select s.id,s.name,n.hash_dir,s.version,s.size,s.dir from web_site s \
+	strcpy(query,"select s.id,s.name,n.hash_dir,s.version,s.size,s.dir,s.status from web_site s \
 			 	  inner join web_namespace n on (s.namespace_id = n.id)");
+	printf("Query: %s\n",query);
 	logs_write(db->logs,L_DEBUG,"db_load_sites", query);
 
 	if(mysql_query(db->con,query)){
@@ -239,7 +242,7 @@ int db_load_sites(T_db *db, T_lista *l, char *error, int *db_fail){
 	while ((row = mysql_fetch_row(result))){
 		new_site = (T_site*)malloc(sizeof(T_site));
 		sprintf(dir,"%s/%s",row[2],row[5]);
-		site_init(new_site,row[1],strtoul(row[0],&ptr,10),dir,atoi(row[3]),atoi(row[4]));
+		site_init(new_site,row[1],strtoul(row[0],&ptr,10),dir,atoi(row[3]),atoi(row[4]),atoi(row[6]));
 		/* Cargamos los alias */
 		if(!db_load_site_alias(db,new_site,row[0],error,db_fail))
 			return 0;
@@ -532,7 +535,7 @@ int db_site_add(T_db *db, T_site **newsite, char *name, unsigned int namespace_i
 		row = mysql_fetch_row(result);
 		sprintf(newdir,"%s/%s",row[0],hash_dir);
 		(*newsite) = (T_site *)malloc(sizeof(T_site));
-		site_init(*newsite,name,site_id,newdir,1,1);
+		site_init(*newsite,name,site_id,newdir,1,1,S_ONLINE);
 
 		/* Poblamos los indices */
 		for(i=5;i>=0;i--){
@@ -682,7 +685,9 @@ int db_site_status(T_db *db, char *namespace_id, char *site_id, char *status, ch
 
 	if(!db_site_exist(db,namespace_id,site_id,error,db_fail))
 		return 0;
-	sprintf(query,"update web_site set status=%c where user_id=%s", status,site_id);
+	sprintf(query,"update web_site set status=%s where id=%s and namespace_id=%s",
+			status,site_id,namespace_id);
+	printf("Query: %s\n",query);
 	if(mysql_query(db->con,query)){
 		/* algo fallo */
 		logs_write(db->logs,L_ERROR,"db_site_mod","DB_ERROR");
