@@ -1,17 +1,18 @@
 /* Posee los metodos y estructuras de datos para manejar el
  * acceso a la base de datos
  */
-
 #include <mysql/mysql.h>
 #include <stdlib.h>
 #include "config.h"
-#include "structs.h"
 #include "dictionary.h"
 #include "logs.h"
 #include "lista.h"
+#include "structs.h"
+#include "dim_string.h"
 
 #ifndef DB_H
 #define DB_H
+
 
 typedef enum {DB_ONLINE, DB_OFFLINE} T_DB_status;
 
@@ -45,9 +46,9 @@ int db_login(T_db *db, T_dictionary *d, char *error, int *db_fail);
 int db_limit_sites(T_db *db, char *namespace_id, int *db_fail);
 int db_get_sites_id(T_db *db, char *namespace_id, int site_ids[256], int *site_ids_len, char *error, int *db_fail );
 int db_site_add(T_db *db, T_site **newsite, char *name,
-		unsigned int namespace_id, char *error, int *db_fail);
+		uint32_t namespace_id, char *error, int *db_fail);
 
-int db_site_mod(T_db *db, T_site *site, T_dictionary *d, char *error, int *db_fail);
+int db_site_save(T_db *db, T_site *site, char *error, int *db_fail);
 int db_site_list(T_db *db, T_lista *lista, char *namespace_id, int *db_fail);
 int db_site_del(T_db *db, char *site_id, uint32_t size, char *error, int *db_fail);
 uint16_t db_site_exist(T_db *db, char *namespace_id, char *site_id, char *error, int *db_fail);
@@ -64,6 +65,7 @@ int db_ftp_add(T_db *db, T_dictionary *d, T_config *c, char *error, int *db_fail
 int db_ftp_del(T_db *db, T_dictionary *d, char *error, int *db_fail);
 
 /* Para los namespaces */
+int db_namespaceName(T_db *db,char **message, uint32_t id, int *db_fail);
 int db_namespace_list(T_db *db,char **message,int *db_fail);
 int db_namespace_show(T_db *db,char *namespace_id,char **message,int *db_fail);
 int db_namespace_add(T_db *db, T_dictionary *d, int *db_fail);

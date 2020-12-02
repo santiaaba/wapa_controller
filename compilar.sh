@@ -34,4 +34,4 @@ gcc -c valid.c
 gcc -c sock_connect.c
 gcc -c dim_string.c
 
-gcc controller.c $ARG -lpthread -lmicrohttpd dim_string.o valid.o sock_connect.o dictionary.o logs.o lista.o config.o task.o json.o server.o parce.o db.o structs.o -L/usr/lib64/mysql/ -lmysqlclient -o controller
+gcc controller.c $ARG -lpthread -lmicrohttpd -ljansson dim_string.o valid.o sock_connect.o dictionary.o logs.o lista.o config.o task.o json.o server.o parce.o db.o structs.o -L/usr/lib64/mysql/ -lmysqlclient -o controller

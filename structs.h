@@ -7,11 +7,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "parce.h"
+#include "dim_string.h"
 #include "lista.h"
 #include "sock_connect.h"
 
 #ifndef STRUCT_H
 #define STRUCT_H
+
 
 #define	SITE_MAX_SIZE	10
 #define ROLE_BUFFER_SIZE 25
@@ -44,7 +46,7 @@ void s_e_init(T_s_e *a, unsigned int id, char *name);
 void s_e_free(T_s_e **a);
 char *s_e_get_name(T_s_e *a);
 int s_e_get_id(T_s_e *a);
-void s_e_set_name(T_s_e *a);
+void s_e_to_json(T_s_e *a, char **message);
 
 /*****************************
  	Sitio
@@ -56,6 +58,8 @@ typedef struct {
 	unsigned int size;   //4 bytes
 	char *dir;   //Directorio desde los hash de los subdirectorios
 				 // EJ: 06/90/a12k3123n1k231
+	uint32_t namespaceId;
+	char *namespaceName;
 	T_site_status status;
 	T_sc_status sc_status;
 	T_lista *alias;
@@ -65,14 +69,18 @@ typedef struct {
 
 void site_init(T_site *s, char *name, uint32_t id, char *dir,
                unsigned int version, unsigned int size,
-			   T_site_status status);
+			   T_site_status status, uint32_t namespaceId,
+			   char *namespaceName);
 uint32_t site_get_id(T_site *s);
 unsigned int site_get_version(T_site *s);
+void site_increse_version(T_site *s);
 char *site_get_name(T_site *s);
 char *site_get_dir(T_site *s);
 unsigned int site_get_size(T_site *s);
 unsigned int site_get_real_size(T_site *s);
 T_lista *site_get_alias(T_site *s);
+void site_put_alias(T_site *s, T_lista *l);
+void site_put_indexes(T_site *s, T_lista *l);
 T_lista *site_get_indexes(T_site *s);
 T_site_status site_get_status(T_site *s);
 void site_update(T_site *s);

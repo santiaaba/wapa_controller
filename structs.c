@@ -52,18 +52,22 @@ void _4bytes_to_int(char *_4bytes, uint32_t *i){
 ******************************/
 void site_init(T_site *s, char *name, uint32_t id, char *dir,
 	       unsigned int version, unsigned int size,
-		   T_site_status status){
+		   T_site_status status, uint32_t namespaceId,
+		   char *namespaceName){
 
 	s->workers = (T_lista*)malloc(sizeof(T_lista));
 	s->alias = (T_lista*)malloc(sizeof(T_lista));
 	s->indexes = (T_lista*)malloc(sizeof(T_lista));
 	s->dir = NULL;
+	s->namespaceName = NULL;
 
 	lista_init(s->workers,sizeof(T_worker));
-	lista_init(s->alias,sizeof(T_s_e));
-	lista_init(s->indexes,sizeof(T_s_e));
+	lista_init(s->alias,sizeof(char));
+	lista_init(s->indexes,sizeof(char));
 	strcpy(s->name,name);
 	dim_copy(&(s->dir),dir);
+	s->namespaceId = namespaceId;
+	dim_copy(&(s->namespaceName),namespaceName);
 	s->status = status;
 	s->sc_status = SC_NONE;
 	s->id = id;
@@ -81,6 +85,10 @@ uint32_t site_get_id(T_site *s){
 
 unsigned int site_get_version(T_site *s){
 	return s->version;
+}
+
+void site_increse_version(T_site *s){
+	s->version++;
 }
 
 char *site_get_dir(T_site *s){
@@ -119,6 +127,24 @@ void site_set_size(T_site *s, unsigned int size){
 
 void site_set_status(T_site *s, T_site_status status){
 	s->status = status;
+}
+
+void site_put_alias(T_site *s, T_lista *l){
+	/* Copia los elementos de la lista que viene
+     * por parametro en la lista de los alias. Ojo
+     * que lista_copy no "copia" sino que los elementos
+     * en la nueva lista son los mismos de la vieja lista */
+	lista_clean(s->alias,free);
+	lista_copy(l,s->alias);
+}
+
+void site_put_indexes(T_site *s, T_lista *l){
+	/* Copia los elementos de la lista que viene
+     * por parametro en la lista de los alias. Ojo
+     * que lista_copy no "copia" sino que los elementos
+     * en la nueva lista son los mismos de la vieja lista */
+	lista_clean(s->indexes,free);
+	lista_copy(l,s->indexes);
 }
 
 void site_update(T_site *s){
@@ -162,6 +188,7 @@ void site_start(T_site *s){
 void site_to_json(T_site *s,char **message){
 	char aux[200];
 	char *ws = NULL;
+	char *urls = NULL;
 	char *ptr;
 	dim_init(message);
 	dim_copy(message,"{\"name\":\"");
@@ -169,22 +196,50 @@ void site_to_json(T_site *s,char **message){
 	dim_concat(message,"\",\"id\":\"");
 	sprintf(aux,"%llu", s->id);
 	dim_concat(message,aux);
+
+	dim_concat(message,"\",\"idNamespace\":\"");
+	sprintf(aux,"%lu", s->namespaceId);
+	dim_concat(message,aux);
+	dim_concat(message,"\",\"namespaceName\":\"");
+	dim_concat(message,s->namespaceName);
+
+
 	dim_concat(message,"\",\"directory\":\"");
 	dim_concat(message,s->dir);
+
 	dim_concat(message,"\",\"version\":\"");
 	sprintf(aux,"%lu", s->version);
 	dim_concat(message,aux);
+
+	dim_concat(message,"\",\"replicas\":\"");
+	sprintf(aux,"%i", s->size);
+	dim_concat(message,aux);
+
 	dim_concat(message,"\",\"status\":\"");
 	itosstatus(s->status,aux);
 	dim_concat(message,aux);
+
 	dim_concat(message,"\",\"clusterStatus\":\"");
 	itoscstatus(s->sc_status,aux);
 	dim_concat(message,aux);
+
 	dim_concat(message,"\",\"workers\":");
 	lista_to_json(s->workers,&ws,worker_to_json);
 	dim_concat(message,ws);
+
+	/* Los alias */
+	dim_concat(message,",\"urls\":");
+	lista_to_json(s->alias,&urls,dim_to_json);
+	dim_concat(message,urls);
+
+	/* Los indices */
+	dim_concat(message,",\"indexes\":");
+	lista_to_json(s->indexes,&urls,dim_to_json);
+	dim_concat(message,urls);
+
 	dim_concat(message,"}");
 }
+
 /*****************************
 	 Workers
 ******************************/
@@ -983,4 +1038,14 @@ int s_e_get_id(T_s_e *a){
 void s_e_free(T_s_e **a){
 	free((*a)->name);
 	free(*a);
+}
+
+void s_e_to_json(T_s_e *a, char **message){
+	char aux[200];
+	dim_init(message);
+	sprintf(aux,"{\"id\":\"%u\"",a->id);
+	dim_copy(message,aux);
+	dim_concat(message,"\",\"value\":\"");
+	dim_concat(message,a->name);
+	dim_concat(message,"\"}");
 }

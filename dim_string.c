@@ -1,6 +1,13 @@
 #include "dim_string.h"
 
+void dim_new(char **s1){
+	/* Genera un nuevo puntero a un nuevo string */
+	*s1=(char *)malloc(sizeof(char));
+	*s1[0] = '\0';
+}
+
 void dim_init(char **s1){
+	/* Realoca el puntero del string actual a 1. Es como borrar el string */
 	*s1=(char *)realloc(*s1,1);
 	*s1[0] = '\0';
 }
@@ -10,6 +17,16 @@ void dim_copy(char **s1, char *s2){
 	*s1=(char *)realloc(*s1, strlen(s2) + 1);
 	//printf("dim aca 2\n");
 	strcpy(*s1,s2);
+	//printf("dim aca 3\n");
+}
+
+void dim_to_json(char *s1, char **s2){
+	//printf("dim aca: %p\n",*s1);
+	*s2=(char *)realloc(*s2, strlen(s1) + 3);
+	//printf("dim aca 2\n");
+	strcpy(*s2,"\"");
+	strcat(*s2,s1);
+	strcat(*s2,"\"");
 	//printf("dim aca 3\n");
 }
 

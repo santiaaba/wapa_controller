@@ -9,6 +9,7 @@
 #include "db.h"
 #include "logs.h"
 #include "dim_string.h"
+#include <jansson.h>
 #include <time.h>
 
 #ifndef TASK_H

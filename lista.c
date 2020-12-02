@@ -20,10 +20,15 @@ void lista_add(T_lista *l, void *e){
 
 	new = (lista_node*)malloc(sizeof(lista_node));
 	new->next = NULL;
-	new->data = malloc(l->e_size);
 
+	/** MMMMMMMMMM.... me parece que no hay que
+	  * copiar el contenido sino guardar el puntero */
 	/* Copiamos el contenido */
-	memcpy(new->data,e,l->e_size);
+	//new->data = malloc(l->e_size);
+	//memcpy(new->data,e,l->e_size);
+	/**** MMMMMMMMMMMMMMMMMM  ******/
+
+	new->data = e;
 
 	l->size++;
 
@@ -209,18 +214,21 @@ void *lista_sort(T_lista *l, float (*get_value)(void*), int des){
 }
 
 void *lista_to_json(T_lista *l, char **message, void(*to_json)(void*,char**)){
+	/* Imprime una lista en formato json sin cambiar el puntero
+ 	 * al elemento actual */
 	
+	lista_node *actual;
 	char *aux = NULL;
-	void *e;
 	int vacia=1;
-	lista_first(l);
+
 	dim_init(message);
 	dim_copy(message,"[");
-	while(!lista_eol(l)){
+
+	actual = l->first;
+	while(actual != NULL){
 		vacia=0;
 		printf("dim_init 1\n");
-		e = lista_get(l);
-		to_json(e,&aux);
+		to_json(actual->data,&aux);
 		printf("dim_init 2\n");
 		printf("Entro en la lista 0:%s + %s\n",*message,aux);
 		dim_concat(message,aux);
@@ -228,7 +236,7 @@ void *lista_to_json(T_lista *l, char **message, void(*to_json)(void*,char**)){
 		dim_concat(message,",");
 		printf("Entro en la lista 1\n");
 		printf("datos: %s\n",*message);
-		lista_next(l);
+		actual = actual->next;
 	}
 	if(!vacia){
 		dim_end(message,']');

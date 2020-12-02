@@ -1,9 +1,9 @@
+#ifndef LISTA_H
+#define LISTA_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef LISTA_H
-#define LISTA_H
 
 typedef struct lista T_lista;
 

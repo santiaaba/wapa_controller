@@ -214,13 +214,11 @@ T_task_status task_get_status(T_task *t){
 void task_site_show(T_task *t, T_lista *sitios, T_logs *logs){
 	T_site *site = NULL;
 	char *namespace_id;
+	char *namespaceName = NULL;
 	char *message = NULL;
 	int db_fail;
 
-	//site_id = dictionary_get(t->data,"site_id");
 	site = lista_find(sitios,site_get_id,atoi(dictionary_get(t->data,"site_id")));
-	//namespace_id = dictionary_get(t->data,"namespace_id");
-	//db_site_show(db,&message,site_id,namespace_id,&db_fail);
 	if(!site)
         task_done(t,HTTP_404,"\"Sitio no existe\"");
     else {
@@ -430,15 +428,29 @@ void task_site_mod(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 	/* Modifica un sitio */
 
 	T_site *site;
+	T_lista *lista_aux;
+	json_error_t j_error;
+	json_t *j_site;
+	json_t *j_element;
+	char *new_url = NULL;
+	char *new_index = NULL;
+	char *url = NULL;
+	char *index = NULL;
+	char *body = NULL;
 	int db_fail;
 	uint16_t version;
 	char error[200];
 	char aux[40];
+	int i = 0;
+	T_s_e *s_e;
 
-	/* Verificamos que el sitio corresponda al suscriber_id */
-	version = db_site_exist(db,dictionary_get(t->data,"namespace_id"),
-		dictionary_get(t->data,"site_id"),error,&db_fail);
-	if(!version){
+	lista_aux = (T_lista*)malloc(sizeof(T_lista));
+	lista_init(lista_aux,sizeof(char));
+
+	printf("Modificamos sitio %lu\n",atoi(dictionary_get(t->data,"site_id")));
+	/* Verificamos que el sitio exista en las estructuras */
+	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
+	if(!site){
 		if(db_fail){
 			task_done(t,HTTP_501,M_DB_ERROR);
 		} else {
@@ -446,23 +458,102 @@ void task_site_mod(T_task *t, T_lista *l, T_db *db, T_logs *logs){
 		}
 		return;
 	}
-	/* Verificamos que el sitio exista en las estructuras */
-	site = lista_find(l,site_get_id,atoi(dictionary_get(t->data,"site_id")));
-	if(!site){
-		task_done(t,HTTP_500,"\"Error fatal a analizar: task_site_mod\"");
+
+	/* Obtenido el sitio, lo modificamos */
+	printf("Sitio obtenido\n");
+	
+	body = dictionary_get(t->data,"data");
+	if(body == NULL){
+		task_done(t,HTTP_400,"\"Faltan los datos\"");
+		return;
+	}
+	printf("Body obtenido:%s\n",body);
+	j_site = json_loads(body,0,&j_error);	// array con cada elemento del sitio
+	if(j_site == NULL){
+		task_done(t,HTTP_400,"\"Error en sitaxis de datos\"");
 		return;
 	}
 
-	sprintf(aux,"%lu",version);
-	dictionary_add(t->data,"version",aux);
-	/* modificamos el sitio en la base de datos */
-	if(!db_site_mod(db,site,t->data,error,&db_fail)){
+	/* Alias */
+	if(json_object_get(j_site,"urls") == NULL){
+		task_done(t,HTTP_400,"\"Error en sitaxis de datos. Falnta URLS\"");
+		return;
+	}
+
+	i = 0;
+	printf("Hasta aca\n");
+	while(i < json_array_size(json_object_get(j_site,"urls"))){
+		printf("Obtenemos alias\n");
+		url = json_string_value(json_array_get(json_object_get(j_site,"urls"),i));
+		printf("Alias %s\n",url);
+		if(url == NULL){
+			task_done(t,HTTP_400,"\"Error en sitaxis de datos. URL error\"");
+			return;
+		}
+		dim_new(&new_url);
+		dim_copy(&new_url,url);
+		printf("paso 1\n");
+		lista_add(lista_aux,new_url);
+		printf("paso 2\n");
+		i++;
+	}
+	printf("Llego aca\n");
+	site_put_alias(site, lista_aux);
+	printf("Llego aca 2\n");
+	/* Vaciamos la lista sin borrar los elementos ya que ahora forman parte de
+	 * la lista de alias dentro del sitio */
+	lista_erase(lista_aux);
+	printf("Llego aca 3\n");
+
+	/* Indexes */
+	if(json_object_get(j_site,"indexes") == NULL){
+		task_done(t,HTTP_400,"\"Error en sitaxis de datos. Falnta indexes\"");
+		return;
+	}
+
+	i = 0;
+	printf("Hasta aca\n");
+	while(i < json_array_size(json_object_get(j_site,"indexes"))){
+		printf("Obtenemos alias\n");
+		index = json_string_value(json_array_get(json_object_get(j_site,"indexes"),i));
+		printf("Index %s\n",index);
+		if(index == NULL){
+			task_done(t,HTTP_400,"\"Error en sitaxis de datos. index error\"");
+			return;
+		}
+		dim_new(&new_index);
+		dim_copy(&new_index,index);
+		printf("paso 1\n");
+		lista_add(lista_aux,new_index);
+		printf("paso 2\n");
+		i++;
+	}
+	printf("Llego aca\n");
+	site_put_indexes(site, lista_aux);
+	printf("Llego aca 2\n");
+
+	/* Vaciamos la lista sin borrar los elementos ya que ahora forman parte de
+	 * la lista de alias dentro del sitio */
+	lista_erase(lista_aux);
+	printf("Llego aca 3\n");
+	/* Ya no utilizamos mas la lista aux. Debemos eliminar el puntero */
+	free(lista_aux);
+	printf("Llego aca 4\n");
+
+	/* Instancias */
+
+	/* Salvamos */
+	site_increse_version(site);
+	if(!db_site_save(db,site,error,&db_fail)){
 		if(db_fail)
 			task_done(t,HTTP_501,M_DB_ERROR);
 		else{
 			task_done(t,HTTP_499,error);
 		}
 	}
+	/* Aplicamos */
+	printf("Llego aca 5\n");
+	site_update(site);
 	task_done(t,HTTP_200,"\"Sitio modificado\"");
 }
 
